@@ -26,6 +26,7 @@ def create_debate(req: CreateDebateRequest) -> dict[str, Any]:
         "created_at": now,
         "updated_at": now,
         "rounds": [],
+        "round_summaries": [],
         "report": {},
     }
     _debates[debate_id] = record
@@ -58,11 +59,42 @@ def save_debate_rounds_and_report(
     record["updated_at"] = _now_iso()
 
 
+def append_round_and_summary(
+    debate_id: str,
+    round_data: dict[str, Any],
+    step_summary: str,
+) -> None:
+    record = _debates.get(debate_id)
+    if record is None:
+        return
+    rounds = record.setdefault("rounds", [])
+    round_summaries = record.setdefault("round_summaries", [])
+    rounds.append(round_data)
+    round_summaries.append(step_summary)
+    record["current_round_index"] = len(rounds)
+    record["updated_at"] = _now_iso()
+
+
+def save_debate_report(debate_id: str, report: dict[str, Any]) -> None:
+    record = _debates.get(debate_id)
+    if record is None:
+        return
+    record["report"] = report
+    record["updated_at"] = _now_iso()
+
+
 def get_debate_rounds(debate_id: str) -> list[dict[str, Any]]:
     record = _debates.get(debate_id)
     if record is None:
         return []
     return record.get("rounds", [])
+
+
+def get_debate_round_summaries(debate_id: str) -> list[str]:
+    record = _debates.get(debate_id)
+    if record is None:
+        return []
+    return record.get("round_summaries", [])
 
 
 def get_debate_report(debate_id: str) -> dict[str, Any]:

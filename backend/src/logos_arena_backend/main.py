@@ -9,15 +9,22 @@ from logos_arena_backend.schemas.debate import (
     ReportResponse,
     RoundResponse,
     RunDebateResponse,
+    StepMediationResponse,
+    StepRoundResponse,
 )
 from logos_arena_backend.store import (
     create_debate,
     get_debate,
     get_debate_report,
+    get_debate_round_summaries,
     get_debate_rounds,
     list_debates,
 )
-from logos_arena_backend.orchestrator import run_debate as orchestrate_run
+from logos_arena_backend.orchestrator import (
+    DebateStepError,
+    run_debate as orchestrate_run,
+    run_next_step as orchestrate_next_step,
+)
 
 app = FastAPI(title="LogosArena Backend", version="0.1.0")
 
@@ -119,6 +126,42 @@ def run_debate_endpoint(debate_id: str) -> RunDebateResponse:
     return RunDebateResponse(job_id=result.debate_id, status=result.status)
 
 
+@app.post(
+    "/debates/{debate_id}/step",
+    response_model=StepRoundResponse | StepMediationResponse,
+    tags=["debates"],
+)
+def run_debate_step_endpoint(debate_id: str) -> StepRoundResponse | StepMediationResponse:
+    try:
+        result = orchestrate_next_step(debate_id)
+    except DebateStepError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=_error_payload(message=exc.message, code=exc.code),
+        ) from exc
+
+    if result.step_type == "round":
+        if result.round is None or result.round_index is None:
+            raise HTTPException(
+                status_code=500,
+                detail=_error_payload(
+                    message="Step de round retornou payload inválido.",
+                    code="INTERNAL_STEP_PAYLOAD_ERROR",
+                ),
+            )
+        return StepRoundResponse(
+            step_type="round",
+            round_index=result.round_index,
+            round=RoundResponse(**result.round),
+            step_summary=result.step_summary or "",
+        )
+    return StepMediationResponse(
+        step_type="mediation",
+        report=ReportResponse(**(result.report or {})),
+        status=result.status or "completed",
+    )
+
+
 @app.get("/debates/{debate_id}/rounds", response_model=DebateRoundsResponse, tags=["debates"])
 def get_debate_rounds_endpoint(debate_id: str) -> DebateRoundsResponse:
     record = get_debate(debate_id)
@@ -128,7 +171,11 @@ def get_debate_rounds_endpoint(debate_id: str) -> DebateRoundsResponse:
             detail=_error_payload(message="Debate não encontrado.", code="DEBATE_NOT_FOUND"),
         )
     raw_rounds = get_debate_rounds(debate_id)
-    return DebateRoundsResponse(rounds=[RoundResponse(**r) for r in raw_rounds])
+    round_summaries = get_debate_round_summaries(debate_id)
+    return DebateRoundsResponse(
+        rounds=[RoundResponse(**r) for r in raw_rounds],
+        round_summaries=round_summaries,
+    )
 
 
 @app.get("/debates/{debate_id}/report", response_model=ReportResponse, tags=["debates"])

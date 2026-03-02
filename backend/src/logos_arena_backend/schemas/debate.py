@@ -74,7 +74,21 @@ class RoundResponse(BaseModel):
 
 class DebateRoundsResponse(BaseModel):
     rounds: list[RoundResponse] = Field(default_factory=list)
+    round_summaries: list[str] = Field(default_factory=list)
 
 
 class ReportResponse(BaseModel):
     content_md: str = ""
+
+
+class StepRoundResponse(BaseModel):
+    step_type: str = "round"
+    round_index: int
+    round: RoundResponse
+    step_summary: str
+
+
+class StepMediationResponse(BaseModel):
+    step_type: str = "mediation"
+    report: ReportResponse
+    status: str

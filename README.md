@@ -44,7 +44,7 @@ The goal is to transform divisive questions into traceable, auditable reasoning 
 
 ## MVP Scope
 
-The first release is scoped to (see full definition in [docs/SPECS.md](docs/SPECS.md) §1.1):
+The first release is scoped to (see full definition in [context/specs/01-domain-config.md](context/specs/01-domain-config.md) §1.1):
 
 * 2 debaters (Pro vs Con)
 * 3 fixed rounds: opening, rebuttal, closing + mediator report
@@ -77,7 +77,8 @@ The initial version focuses on:
 
 ## Documentation
 
-* [Technical Specification (SPECS)](docs/SPECS.md) — domain, API, persistence, roadmap.
+* [User guide (non-technical users)](docs/README.md) — how to use LogosArena in plain language.
+* [Technical specification (for devs/agents)](context/README.md) — domain, API, persistence, roadmap (context/specs/).
 
 ---
 
