@@ -52,6 +52,26 @@ body {
   animation: glyph-fall 1.6s ease-in-out infinite;
 }
 
+.expander-grid {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0.65;
+  transition: grid-template-rows 240ms ease, opacity 240ms ease;
+}
+
+details[open] .expander-grid {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.expander-chevron {
+  transition: transform 220ms ease;
+}
+
+details[open] .expander-chevron {
+  transform: rotate(180deg);
+}
+
 @keyframes step-indeterminate {
   0% {
     transform: translateX(-130%);

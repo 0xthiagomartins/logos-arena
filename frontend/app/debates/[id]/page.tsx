@@ -102,11 +102,14 @@ function RoundCard({ round, summary }: { round: RoundResponse; summary: string }
         </div>
       </div>
       <details className="mt-4 rounded-lg border border-white/15 bg-white/[0.04] p-4">
-        <summary className="cursor-pointer list-none text-xs uppercase tracking-[0.18em] text-matrix-dim">
-          Resumo de qualidade (expandir)
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-matrix-dim">
+          <span>Clique para ver a síntese da rodada</span>
+          <span className="expander-chevron text-sm">⌄</span>
         </summary>
-        <div className="mt-3">
-          <MarkdownContent content={summary || "Resumo ainda não disponível para este round."} />
+        <div className="expander-grid mt-3">
+          <div className="overflow-hidden">
+            <MarkdownContent content={summary || "Resumo ainda não disponível para este round."} />
+          </div>
         </div>
       </details>
     </article>
@@ -131,11 +134,14 @@ function DraftCard({ draft }: { draft: StreamingDraft }) {
         </div>
       </div>
       <details className="mt-4 rounded-lg border border-white/15 bg-white/[0.04] p-4">
-        <summary className="cursor-pointer list-none text-xs uppercase tracking-[0.18em] text-matrix-dim">
-          Resumo de qualidade (expandir)
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-matrix-dim">
+          <span>Clique para ver a síntese da rodada</span>
+          <span className="expander-chevron text-sm">⌄</span>
         </summary>
-        <div className="mt-3">
-          <MarkdownContent content={draft.summary || "_Mediador analisando..._"} />
+        <div className="expander-grid mt-3">
+          <div className="overflow-hidden">
+            <MarkdownContent content={draft.summary || "_Mediador analisando..._"} />
+          </div>
         </div>
       </details>
     </article>
@@ -144,37 +150,38 @@ function DraftCard({ draft }: { draft: StreamingDraft }) {
 
 function parseMediatorReport(content: string): ParsedMediatorReport | null {
   const normalized = content.replace(/\r/g, "");
-  const sections = [
+  const sections: Array<{
+    key: MediatorSectionKey;
+    patterns: RegExp[];
+  }> = [
     {
-      key: "pro" as const,
-      headings: [
-        "Resumo dos argumentos do lado Pro:",
-        "**Resumo dos argumentos do lado Pro**",
-        "Resumo dos argumentos do lado Pro",
+      key: "pro",
+      patterns: [
+        /\*{0,2}\s*resumo dos argumentos do lado pro\s*\*{0,2}\s*:?/i,
+        /\*{0,2}\s*resumo pro\s*\*{0,2}\s*:?/i,
       ],
     },
     {
-      key: "con" as const,
-      headings: [
-        "Resumo dos argumentos do lado Contra:",
-        "**Resumo dos argumentos do lado Contra**",
-        "Resumo dos argumentos do lado Contra",
+      key: "con",
+      patterns: [
+        /\*{0,2}\s*resumo dos argumentos do lado contra\s*\*{0,2}\s*:?/i,
+        /\*{0,2}\s*resumo contra\s*\*{0,2}\s*:?/i,
       ],
     },
     {
-      key: "analysis" as const,
-      headings: ["Análise crítica:", "**Análise crítica**", "Análise crítica"],
+      key: "analysis",
+      patterns: [/\*{0,2}\s*an[áa]lise cr[ií]tica\s*\*{0,2}\s*:?/i],
     },
     {
-      key: "conclusion" as const,
-      headings: ["Conclusão:", "**Conclusão**", "Conclusão"],
+      key: "conclusion",
+      patterns: [/\*{0,2}\s*conclus[aã]o\s*\*{0,2}\s*:?/i],
     },
   ];
 
   const starts = sections
     .map((section) => {
-      const index = section.headings
-        .map((h) => normalized.indexOf(h))
+      const index = section.patterns
+        .map((pattern) => normalized.search(pattern))
         .filter((i) => i >= 0)
         .sort((a, b) => a - b)[0];
       return { key: section.key, index };
@@ -191,13 +198,32 @@ function parseMediatorReport(content: string): ParsedMediatorReport | null {
     conclusion: "",
   };
 
+  const cutAtSectionMarker = (value: string): string => {
+    const markers = [
+      /\n\s*\*{0,2}an[áa]lise cr[ií]tica\*{0,2}:?/i,
+      /\n\s*\*{0,2}conclus[aã]o\*{0,2}:?/i,
+      /\n\s*final_outcome:/i,
+    ];
+    let nextCut = value.length;
+    for (const marker of markers) {
+      const match = value.match(marker);
+      if (match?.index !== undefined) {
+        nextCut = Math.min(nextCut, match.index);
+      }
+    }
+    return value.slice(0, nextCut).trim();
+  };
+
   for (let i = 0; i < starts.length; i += 1) {
     const current = starts[i];
     const next = starts[i + 1];
     const rawSlice = normalized.slice(current.index, next ? next.index : undefined).trim();
-    const cleaned = rawSlice.replace(/^\*{0,2}[^:\n]+\*{0,2}:?\s*/m, "").trim();
+    const cleaned = rawSlice.replace(/^\*{0,2}[^\n:]+(?:\*{0,2})?:?\s*/i, "").trim();
     contentByKey[current.key] = cleaned;
   }
+
+  contentByKey.pro = cutAtSectionMarker(contentByKey.pro);
+  contentByKey.con = cutAtSectionMarker(contentByKey.con);
 
   const outcomeMatch = normalized.match(/final_outcome:\s*(pro|con|inconclusivo|depende)/i);
   const finalOutcome = outcomeMatch ? (outcomeMatch[1].toLowerCase() as ParsedMediatorReport["finalOutcome"]) : null;
@@ -226,6 +252,10 @@ function firstParagraph(text: string): string {
   return parts[0] ?? cleaned;
 }
 
+function removeFinalOutcomeLine(text: string): string {
+  return text.replace(/^\s*final_outcome:\s*(pro|con|inconclusivo|depende)\s*$/gim, "").trim();
+}
+
 function MediatorReportView({ content }: { content: string }) {
   const parsed = useMemo(() => parseMediatorReport(content), [content]);
 
@@ -242,43 +272,51 @@ function MediatorReportView({ content }: { content: string }) {
         )}
       </div>
 
-      <details className="rounded-lg border border-white/10 bg-white/[0.03] p-3" open>
-        <summary className="cursor-pointer list-none text-xs uppercase tracking-[0.15em] text-matrix-dim">
-          Resumo Pro
-        </summary>
-        <div className="mt-3">
-          <MarkdownContent content={parsed.pro || "_Sem conteúdo._"} />
+      <section className="space-y-2 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+        <p className="text-xs uppercase tracking-[0.15em] text-matrix-dim">Resumo</p>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
+            <p className="mb-2 text-xs uppercase tracking-[0.12em] text-matrix-dim">Pro</p>
+            <MarkdownContent content={parsed.pro || "_Sem conteúdo._"} />
+          </div>
+          <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
+            <p className="mb-2 text-xs uppercase tracking-[0.12em] text-matrix-dim">Con</p>
+            <MarkdownContent content={parsed.con || "_Sem conteúdo._"} />
+          </div>
         </div>
-      </details>
-
-      <details className="rounded-lg border border-white/10 bg-white/[0.03] p-3" open>
-        <summary className="cursor-pointer list-none text-xs uppercase tracking-[0.15em] text-matrix-dim">
-          Resumo Contra
-        </summary>
-        <div className="mt-3">
-          <MarkdownContent content={parsed.con || "_Sem conteúdo._"} />
-        </div>
-      </details>
+      </section>
 
       <details className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
         <summary className="cursor-pointer list-none text-xs uppercase tracking-[0.15em] text-matrix-dim">
-          Análise Crítica
+          Análise Crítica / Lógica
         </summary>
         <div className="mt-3">
-          <MarkdownContent content={parsed.analysis || "_Sem conteúdo._"} />
-        </div>
-      </details>
-
-      <details className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-        <summary className="cursor-pointer list-none text-xs uppercase tracking-[0.15em] text-matrix-dim">
-          Conclusão Completa
-        </summary>
-        <div className="mt-3">
-          <MarkdownContent content={parsed.conclusion || "_Sem conteúdo._"} />
+          <MarkdownContent
+            content={
+              removeFinalOutcomeLine([parsed.analysis, parsed.conclusion].filter(Boolean).join("\n\n")) ||
+              "_Sem conteúdo._"
+            }
+          />
         </div>
       </details>
     </div>
   );
+}
+
+function shortOutcomeLabel(outcome: ParsedMediatorReport["finalOutcome"]): string {
+  if (outcome === "pro") return "PRO";
+  if (outcome === "con") return "CON";
+  if (outcome === "depende") return "DEPENDE";
+  if (outcome === "inconclusivo") return "INCONCLUSIVO";
+  return "SEM RESULTADO";
+}
+
+function outcomeMeaning(outcome: ParsedMediatorReport["finalOutcome"]): string {
+  if (outcome === "pro") return "O mediador avaliou que os argumentos do lado Pro foram mais fortes.";
+  if (outcome === "con") return "O mediador avaliou que os argumentos do lado Con foram mais fortes.";
+  if (outcome === "depende") return "O mediador concluiu que a resposta depende de premissas ou contexto adotado.";
+  if (outcome === "inconclusivo") return "O mediador concluiu que não há evidência argumentativa suficiente para decidir.";
+  return "Resultado ainda não definido.";
 }
 
 export default function DebateRunnerPage() {
@@ -297,9 +335,22 @@ export default function DebateRunnerPage() {
   const [streamingDraft, setStreamingDraft] = useState<StreamingDraft | null>(null);
   const [activeSlide, setActiveSlide] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [isMediatorModalOpen, setIsMediatorModalOpen] = useState(false);
 
   const hasReport = Boolean(state.report?.content_md?.trim());
+  const parsedReport = useMemo(
+    () => (hasReport ? parseMediatorReport(state.report?.content_md ?? "") : null),
+    [hasReport, state.report?.content_md],
+  );
   const status = state.debate?.status ?? "draft";
+  const hasDraftRenderableContent = Boolean(
+    streamingDraft &&
+      (streamingDraft.pro.trim() ||
+        streamingDraft.con.trim() ||
+        streamingDraft.summary.trim() ||
+        streamingDraft.report.trim()),
+  );
+  const showDraftSlide = Boolean(streamingDraft?.roundType && hasDraftRenderableContent);
   const canContinue = useMemo(() => {
     if (!state.debate) return false;
     if (stepLoading) return false;
@@ -313,11 +364,11 @@ export default function DebateRunnerPage() {
       round,
       summary: state.roundSummaries[idx] ?? "",
     }));
-    if (streamingDraft?.roundType) {
+    if (showDraftSlide && streamingDraft) {
       roundSlides.push({ kind: "draft", draft: streamingDraft });
     }
     return roundSlides;
-  }, [state.rounds, state.roundSummaries, streamingDraft]);
+  }, [state.rounds, state.roundSummaries, showDraftSlide, streamingDraft]);
 
   useEffect(() => {
     if (state.rounds.length > 0) {
@@ -328,10 +379,10 @@ export default function DebateRunnerPage() {
   }, [state.rounds.length]);
 
   useEffect(() => {
-    if (streamingDraft?.roundType) {
+    if (showDraftSlide) {
       setActiveSlide(state.rounds.length);
     }
-  }, [streamingDraft?.roundType, state.rounds.length]);
+  }, [showDraftSlide, state.rounds.length]);
 
   useEffect(() => {
     setActiveSlide((prev) => {
@@ -339,6 +390,20 @@ export default function DebateRunnerPage() {
       return Math.min(prev, slides.length - 1);
     });
   }, [slides.length]);
+
+  useEffect(() => {
+    if (!isMediatorModalOpen) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsMediatorModalOpen(false);
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isMediatorModalOpen]);
 
   const loadData = useCallback(async () => {
     if (!debateId) return;
@@ -519,7 +584,25 @@ export default function DebateRunnerPage() {
         </div>
 
         <div className="mb-5 rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm sm:mb-6 sm:p-5">
-          <p className="mb-1 text-xs uppercase tracking-[0.2em] text-matrix-dim">Tese</p>
+          <div className="mb-2 flex items-start justify-between gap-3">
+            <p className="text-xs uppercase tracking-[0.2em] text-matrix-dim">Tese</p>
+            {reportLoading ? (
+              <div className="h-6 w-28 animate-pulse rounded-full bg-white/10" />
+            ) : hasReport ? (
+              <button
+                type="button"
+                onClick={() => setIsMediatorModalOpen(true)}
+                title={outcomeMeaning(parsedReport?.finalOutcome ?? null)}
+                className="rounded-full border border-matrix-green/70 bg-matrix-green/10 px-3 py-1 text-[11px] font-semibold tracking-[0.08em] text-white transition hover:bg-matrix-green/20"
+              >
+                {shortOutcomeLabel(parsedReport?.finalOutcome ?? null)}
+              </button>
+            ) : (
+              <span className="rounded-full border border-white/20 bg-white/[0.03] px-3 py-1 text-[11px] font-semibold tracking-[0.08em] text-white/70">
+                SEM RESULTADO
+              </span>
+            )}
+          </div>
           <p className="text-sm leading-relaxed text-white sm:text-base">
             {state.debate?.question ?? "Carregando pergunta do debate..."}
           </p>
@@ -534,84 +617,64 @@ export default function DebateRunnerPage() {
         {initialLoading ? (
           <RunnerSkeleton />
         ) : (
-          <div className="grid gap-4 lg:grid-cols-3 lg:gap-5">
-            <section className="space-y-4 lg:col-span-2">
-              {slides.length === 0 ? (
-                <div className="rounded-xl border border-white/10 bg-white/5 p-5 text-sm text-white/75 backdrop-blur-sm sm:p-6">
-                  Sem rounds ainda. Clique em <strong className="text-matrix-green">Continuar</strong> para
-                  iniciar.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="overflow-hidden" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-                    <div
-                      className="flex transition-transform duration-500 ease-out"
-                      style={{
-                        width: `${Math.max(slides.length, 1) * 100}%`,
-                        transform: `translateX(-${activeSlide * (100 / Math.max(slides.length, 1))}%)`,
-                      }}
-                    >
-                      {slides.map((slide, idx) => (
-                        <div
-                          key={`${slide.kind}-${idx}`}
-                          className="shrink-0 px-0.5 sm:px-1"
-                          style={{ width: `${100 / Math.max(slides.length, 1)}%` }}
-                        >
-                          {slide.kind === "round" ? (
-                            <RoundCard round={slide.round} summary={slide.summary} />
-                          ) : (
-                            <DraftCard draft={slide.draft} />
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
-                    <button
-                      type="button"
-                      onClick={goPrevSlide}
-                      disabled={activeSlide <= 0}
-                      className="rounded-md border border-white/15 px-3 py-1 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      ← Anterior
-                    </button>
-                    <p className="text-xs text-white/70">
-                      Round {activeSlide + 1} de {slides.length}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={goNextSlide}
-                      disabled={activeSlide >= slides.length - 1}
-                      className="rounded-md border border-white/15 px-3 py-1 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Próximo →
-                    </button>
+          <section className="space-y-4">
+            {slides.length === 0 ? (
+              <div className="rounded-xl border border-white/10 bg-white/5 p-5 text-sm text-white/75 backdrop-blur-sm sm:p-6">
+                Sem rounds ainda. Clique em <strong className="text-matrix-green">Continuar</strong> para
+                iniciar.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="overflow-hidden" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+                  <div
+                    className="flex transition-transform duration-500 ease-out"
+                    style={{
+                      width: `${Math.max(slides.length, 1) * 100}%`,
+                      transform: `translateX(-${activeSlide * (100 / Math.max(slides.length, 1))}%)`,
+                    }}
+                  >
+                    {slides.map((slide, idx) => (
+                      <div
+                        key={`${slide.kind}-${idx}`}
+                        className="shrink-0 px-0.5 sm:px-1"
+                        style={{ width: `${100 / Math.max(slides.length, 1)}%` }}
+                      >
+                        {slide.kind === "round" ? (
+                          <RoundCard round={slide.round} summary={slide.summary} />
+                        ) : (
+                          <DraftCard draft={slide.draft} />
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
-              )}
 
-              {stepLoading && <StepLoadingWidget roundCount={state.rounds.length} />}
-            </section>
-
-            <aside className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm sm:p-5">
-              <p className="mb-3 text-xs uppercase tracking-[0.2em] text-matrix-dim">Mediador</p>
-              {reportLoading ? (
-                <div className="animate-pulse space-y-2">
-                  <div className="h-3 w-full rounded bg-white/10" />
-                  <div className="h-3 w-[92%] rounded bg-white/10" />
-                  <div className="h-3 w-[85%] rounded bg-white/10" />
-                  <div className="h-3 w-[70%] rounded bg-white/10" />
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={goPrevSlide}
+                    disabled={activeSlide <= 0}
+                    className="rounded-md border border-white/15 px-3 py-1 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    ← Anterior
+                  </button>
+                  <p className="text-xs text-white/70">
+                    Round {activeSlide + 1} de {slides.length}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={goNextSlide}
+                    disabled={activeSlide >= slides.length - 1}
+                    className="rounded-md border border-white/15 px-3 py-1 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Próximo →
+                  </button>
                 </div>
-              ) : hasReport ? (
-                <MediatorReportView content={state.report?.content_md ?? ""} />
-              ) : (
-                <p className="text-sm leading-relaxed text-white/75">
-                  Aguardando mediação final. Gere os rounds com o botão Continuar.
-                </p>
-              )}
-            </aside>
-          </div>
+              </div>
+            )}
+
+            {stepLoading && <StepLoadingWidget roundCount={state.rounds.length} />}
+          </section>
         )}
       </div>
 
@@ -637,6 +700,33 @@ export default function DebateRunnerPage() {
           </button>
         </div>
       </div>
+
+      {isMediatorModalOpen && (
+        <div
+          className="fixed inset-0 z-30 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Análise do mediador"
+          onClick={() => setIsMediatorModalOpen(false)}
+        >
+          <div
+            className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-t-2xl border border-white/15 bg-matrix-black p-4 sm:rounded-2xl sm:p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-lg font-bold text-white">Análise do mediador</h2>
+              <button
+                type="button"
+                onClick={() => setIsMediatorModalOpen(false)}
+                className="rounded-md border border-white/20 px-3 py-1 text-sm text-white/85 transition hover:bg-white/10"
+              >
+                Fechar
+              </button>
+            </div>
+            <MediatorReportView content={state.report?.content_md ?? ""} />
+          </div>
+        </div>
+      )}
     </main>
   );
 }

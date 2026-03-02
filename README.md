@@ -1,6 +1,4 @@
-# LogosArena
-
-[![LogosArena](banner.png)](banner.png)
+[![Logos Arena](assets/banner.png)](assets/banner.png)
 
 **Structured AI-powered debate engine** for controversial and complex questions. Two sides, fixed rounds, a mediator agent, and explainable outcomes.
 
