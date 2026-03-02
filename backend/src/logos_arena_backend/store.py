@@ -25,6 +25,8 @@ def create_debate(req: CreateDebateRequest) -> dict[str, Any]:
         "current_round_index": 0,
         "created_at": now,
         "updated_at": now,
+        "rounds": [],
+        "report": {},
     }
     _debates[debate_id] = record
     return record
@@ -40,6 +42,33 @@ def update_debate_status(debate_id: str, status: str) -> None:
         return
     record["status"] = status
     record["updated_at"] = _now_iso()
+
+
+def save_debate_rounds_and_report(
+    debate_id: str,
+    rounds: list[dict[str, Any]],
+    report: dict[str, Any],
+) -> None:
+    record = _debates.get(debate_id)
+    if record is None:
+        return
+    record["rounds"] = rounds
+    record["report"] = report
+    record["updated_at"] = _now_iso()
+
+
+def get_debate_rounds(debate_id: str) -> list[dict[str, Any]]:
+    record = _debates.get(debate_id)
+    if record is None:
+        return []
+    return record.get("rounds", [])
+
+
+def get_debate_report(debate_id: str) -> dict[str, Any]:
+    record = _debates.get(debate_id)
+    if record is None:
+        return {}
+    return record.get("report", {})
 
 
 def list_debates(page: int = 1, per_page: int = 20) -> tuple[list[dict[str, Any]], int]:

@@ -4,10 +4,18 @@ from logos_arena_backend.schemas.debate import (
     CreateDebateRequest,
     DebateListItem,
     DebateListResponse,
+    DebateRoundsResponse,
     DebateResponse,
+    ReportResponse,
     RunDebateResponse,
 )
-from logos_arena_backend.store import create_debate, get_debate, list_debates
+from logos_arena_backend.store import (
+    create_debate,
+    get_debate,
+    get_debate_report,
+    get_debate_rounds,
+    list_debates,
+)
 from logos_arena_backend.orchestrator import run_debate as orchestrate_run
 
 app = FastAPI(title="LogosArena Backend", version="0.1.0")
@@ -96,3 +104,43 @@ def run_debate_endpoint(debate_id: str) -> RunDebateResponse:
     result = orchestrate_run(debate_id)
     return RunDebateResponse(job_id=result.debate_id, status=result.status)
 
+
+@app.get("/debates/{debate_id}/rounds", response_model=DebateRoundsResponse, tags=["debates"])
+def get_debate_rounds_endpoint(debate_id: str) -> DebateRoundsResponse:
+    record = get_debate(debate_id)
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Debate não encontrado.",
+            headers={"X-Code": "DEBATE_NOT_FOUND"},
+        )
+    return DebateRoundsResponse(rounds=get_debate_rounds(debate_id))
+
+
+@app.get("/debates/{debate_id}/report", response_model=ReportResponse, tags=["debates"])
+def get_debate_report_endpoint(debate_id: str) -> ReportResponse:
+    record = get_debate(debate_id)
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Debate não encontrado.",
+            headers={"X-Code": "DEBATE_NOT_FOUND"},
+        )
+    report = get_debate_report(debate_id)
+    return ReportResponse(content_md=report.get("content_md", ""))
+
+
+@app.get("/debates/{debate_id}/events", tags=["debates"])
+def get_debate_events_endpoint(debate_id: str) -> None:
+    record = get_debate(debate_id)
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Debate não encontrado.",
+            headers={"X-Code": "DEBATE_NOT_FOUND"},
+        )
+    raise HTTPException(
+        status_code=501,
+        detail="SSE ainda não implementado neste MVP.",
+        headers={"X-Code": "DEBATE_EVENTS_NOT_IMPLEMENTED"},
+    )

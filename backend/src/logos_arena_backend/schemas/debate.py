@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -60,3 +59,22 @@ class DebateListResponse(BaseModel):
 class RunDebateResponse(BaseModel):
     job_id: str
     status: str
+
+
+class RoundMessage(BaseModel):
+    role: str
+    content: str
+
+
+class RoundResponse(BaseModel):
+    index: int
+    type: str
+    messages: list[RoundMessage] = Field(default_factory=list)
+
+
+class DebateRoundsResponse(BaseModel):
+    rounds: list[RoundResponse] = Field(default_factory=list)
+
+
+class ReportResponse(BaseModel):
+    content_md: str = ""
