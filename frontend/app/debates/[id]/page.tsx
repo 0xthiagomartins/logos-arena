@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type TouchEvent } from "react";
 import MarkdownContent from "@/components/markdown-content";
 import StepLoadingWidget from "@/components/step-loading-widget";
 import {
@@ -32,6 +32,10 @@ type StreamingDraft = {
   report: string;
   phaseLabel: string;
 };
+
+type CarouselSlide =
+  | { kind: "round"; round: RoundResponse; summary: string }
+  | { kind: "draft"; draft: StreamingDraft };
 
 function RunnerSkeleton() {
   return (
@@ -71,6 +75,63 @@ function phaseText(phase: string): string {
   return "Processando step...";
 }
 
+function RoundCard({ round, summary }: { round: RoundResponse; summary: string }) {
+  return (
+    <article className="rounded-xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+      <p className="mb-3 text-xs uppercase tracking-[0.2em] text-matrix-dim">
+        Round {round.index + 1} · {round.type}
+      </p>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">Pro</p>
+          <MarkdownContent content={round.messages[0]?.content ?? ""} />
+        </div>
+        <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">Con</p>
+          <MarkdownContent content={round.messages[1]?.content ?? ""} />
+        </div>
+      </div>
+      <details className="mt-4 rounded-lg border border-white/15 bg-white/[0.04] p-4">
+        <summary className="cursor-pointer list-none text-xs uppercase tracking-[0.18em] text-matrix-dim">
+          Resumo de qualidade (expandir)
+        </summary>
+        <div className="mt-3">
+          <MarkdownContent content={summary || "Resumo ainda não disponível para este round."} />
+        </div>
+      </details>
+    </article>
+  );
+}
+
+function DraftCard({ draft }: { draft: StreamingDraft }) {
+  return (
+    <article className="rounded-xl border border-white/15 bg-white/[0.06] p-5 backdrop-blur-sm">
+      <p className="mb-2 text-xs uppercase tracking-[0.2em] text-matrix-dim">
+        Round {draft.roundIndex + 1} · {draft.roundType}
+      </p>
+      <p className="mb-4 text-sm text-white/75">{draft.phaseLabel}</p>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">Pro</p>
+          <MarkdownContent content={draft.pro || "_Gerando argumento..._"} />
+        </div>
+        <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">Con</p>
+          <MarkdownContent content={draft.con || "_Aguardando resposta..._"} />
+        </div>
+      </div>
+      <details className="mt-4 rounded-lg border border-white/15 bg-white/[0.04] p-4">
+        <summary className="cursor-pointer list-none text-xs uppercase tracking-[0.18em] text-matrix-dim">
+          Resumo de qualidade (expandir)
+        </summary>
+        <div className="mt-3">
+          <MarkdownContent content={draft.summary || "_Mediador analisando..._"} />
+        </div>
+      </details>
+    </article>
+  );
+}
+
 export default function DebateRunnerPage() {
   const params = useParams<{ id: string }>();
   const debateId = params.id;
@@ -85,6 +146,8 @@ export default function DebateRunnerPage() {
   const [reportLoading, setReportLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [streamingDraft, setStreamingDraft] = useState<StreamingDraft | null>(null);
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
   const hasReport = Boolean(state.report?.content_md?.trim());
   const status = state.debate?.status ?? "draft";
@@ -94,6 +157,39 @@ export default function DebateRunnerPage() {
     if (status === "failed" || status === "completed") return false;
     return !hasReport;
   }, [hasReport, state.debate, status, stepLoading]);
+
+  const slides: CarouselSlide[] = useMemo(() => {
+    const roundSlides: CarouselSlide[] = state.rounds.map((round, idx) => ({
+      kind: "round",
+      round,
+      summary: state.roundSummaries[idx] ?? "",
+    }));
+    if (streamingDraft?.roundType) {
+      roundSlides.push({ kind: "draft", draft: streamingDraft });
+    }
+    return roundSlides;
+  }, [state.rounds, state.roundSummaries, streamingDraft]);
+
+  useEffect(() => {
+    if (state.rounds.length > 0) {
+      setActiveSlide(state.rounds.length - 1);
+    } else {
+      setActiveSlide(0);
+    }
+  }, [state.rounds.length]);
+
+  useEffect(() => {
+    if (streamingDraft?.roundType) {
+      setActiveSlide(state.rounds.length);
+    }
+  }, [streamingDraft?.roundType, state.rounds.length]);
+
+  useEffect(() => {
+    setActiveSlide((prev) => {
+      if (slides.length === 0) return 0;
+      return Math.min(prev, slides.length - 1);
+    });
+  }, [slides.length]);
 
   const loadData = useCallback(async () => {
     if (!debateId) return;
@@ -178,7 +274,6 @@ export default function DebateRunnerPage() {
     if (ev.event === "step_done") {
       const payload = ev.data as {
         step_type: "round" | "mediation";
-        round_index?: number;
         round?: RoundResponse;
         step_summary?: string;
         report?: ReportResponse;
@@ -233,6 +328,30 @@ export default function DebateRunnerPage() {
     }
   }
 
+  function goNextSlide() {
+    setActiveSlide((prev) => Math.min(prev + 1, Math.max(slides.length - 1, 0)));
+  }
+
+  function goPrevSlide() {
+    setActiveSlide((prev) => Math.max(prev - 1, 0));
+  }
+
+  function onTouchStart(event: TouchEvent<HTMLDivElement>) {
+    setTouchStartX(event.touches[0]?.clientX ?? null);
+  }
+
+  function onTouchEnd(event: TouchEvent<HTMLDivElement>) {
+    if (touchStartX === null) return;
+    const endX = event.changedTouches[0]?.clientX ?? touchStartX;
+    const delta = endX - touchStartX;
+    if (delta > 60) {
+      goNextSlide();
+    } else if (delta < -60) {
+      goPrevSlide();
+    }
+    setTouchStartX(null);
+  }
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-7xl px-6 pb-32 pt-8">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -267,72 +386,59 @@ export default function DebateRunnerPage() {
       ) : (
         <div className="grid gap-5 lg:grid-cols-3">
           <section className="space-y-4 lg:col-span-2">
-            {state.rounds.length === 0 ? (
+            {slides.length === 0 ? (
               <div className="rounded-xl border border-white/10 bg-white/5 p-6 text-sm text-white/75 backdrop-blur-sm">
                 Sem rounds ainda. Clique em <strong className="text-matrix-green">Continuar</strong> para
                 iniciar.
               </div>
             ) : (
-              state.rounds.map((round, idx) => (
-                <article key={`${round.type}-${round.index}`} className="rounded-xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-                  <p className="mb-3 text-xs uppercase tracking-[0.2em] text-matrix-dim">
-                    Round {round.index + 1} · {round.type}
-                  </p>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-                      <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">Pro</p>
-                      <MarkdownContent content={round.messages[0]?.content ?? ""} />
-                    </div>
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-                      <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">Con</p>
-                      <MarkdownContent content={round.messages[1]?.content ?? ""} />
-                    </div>
+              <div className="space-y-3">
+                <div className="overflow-hidden" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+                  <div
+                    className="flex transition-transform duration-500 ease-out"
+                    style={{
+                      width: `${Math.max(slides.length, 1) * 100}%`,
+                      transform: `translateX(-${activeSlide * (100 / Math.max(slides.length, 1))}%)`,
+                    }}
+                  >
+                    {slides.map((slide, idx) => (
+                      <div
+                        key={`${slide.kind}-${idx}`}
+                        className="shrink-0 px-1"
+                        style={{ width: `${100 / Math.max(slides.length, 1)}%` }}
+                      >
+                        {slide.kind === "round" ? (
+                          <RoundCard round={slide.round} summary={slide.summary} />
+                        ) : (
+                          <DraftCard draft={slide.draft} />
+                        )}
+                      </div>
+                    ))}
                   </div>
-                  <div className="mt-4 rounded-lg border border-white/15 bg-white/[0.04] p-4">
-                    <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">
-                      Resumo de qualidade
-                    </p>
-                    <MarkdownContent
-                      content={state.roundSummaries[idx] ?? "Resumo ainda não disponível para este round."}
-                    />
-                  </div>
-                </article>
-              ))
-            )}
+                </div>
 
-            {streamingDraft && (
-              <article className="rounded-xl border border-white/15 bg-white/[0.06] p-5 backdrop-blur-sm">
-                <p className="mb-2 text-xs uppercase tracking-[0.2em] text-matrix-dim">
-                  {streamingDraft.roundType
-                    ? `Round ${streamingDraft.roundIndex + 1} · ${streamingDraft.roundType}`
-                    : "Mediador"}
-                </p>
-                <p className="mb-4 text-sm text-white/75">{streamingDraft.phaseLabel}</p>
-                {streamingDraft.roundType ? (
-                  <>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-                        <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">Pro</p>
-                        <MarkdownContent content={streamingDraft.pro || "_Gerando argumento..._"} />
-                      </div>
-                      <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-                        <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">Con</p>
-                        <MarkdownContent content={streamingDraft.con || "_Aguardando resposta..._"} />
-                      </div>
-                    </div>
-                    <div className="mt-4 rounded-lg border border-white/15 bg-white/[0.04] p-4">
-                      <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">
-                        Resumo de qualidade
-                      </p>
-                      <MarkdownContent content={streamingDraft.summary || "_Mediador analisando..._"} />
-                    </div>
-                  </>
-                ) : (
-                  <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-                    <MarkdownContent content={streamingDraft.report || "_Gerando relatório final..._"} />
-                  </div>
-                )}
-              </article>
+                <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={goPrevSlide}
+                    disabled={activeSlide <= 0}
+                    className="rounded-md border border-white/15 px-3 py-1 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    ← Anterior
+                  </button>
+                  <p className="text-xs text-white/70">
+                    Round {activeSlide + 1} de {slides.length}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={goNextSlide}
+                    disabled={activeSlide >= slides.length - 1}
+                    className="rounded-md border border-white/15 px-3 py-1 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Próximo →
+                  </button>
+                </div>
+              </div>
             )}
 
             {stepLoading && <StepLoadingWidget roundCount={state.rounds.length} />}
@@ -383,4 +489,3 @@ export default function DebateRunnerPage() {
     </main>
   );
 }
-
