@@ -52,25 +52,6 @@ App: `http://localhost:3000`.
 
 ---
 
-## MVP scope
-
-- **2 debaters** (Pro vs Con), **3 rounds** (opening, rebuttal, closing) + mediator report.
-- **POST /debates** — create debate (draft).
-- **POST /debates/{id}/step** — run next step (one round or mediation); returns round + quality summary.
-- **POST /debates/{id}/run** — run full debate in one request.
-- **GET /debates/{id}/rounds** — list rounds + `round_summaries`.
-- **GET /debates/{id}/report** — mediator report (Markdown).
-- No auth, no billing, no web search in MVP.
-
----
-
-## Docs
-
-- [User guide](docs/README.md) — for end users (plain language).
-- [Context for devs/agents](context/README.md) — specs, API, and roadmap (`context/specs/`).
-
----
-
 ## Vision
 
 Move from ad-hoc AI chat to **structured, logic-driven debates** with traceable reasoning and explainable outcomes.
