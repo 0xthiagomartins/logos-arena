@@ -42,6 +42,18 @@ The goal is to transform divisive questions into traceable, auditable reasoning 
 
 ---
 
+## MVP Scope
+
+The first release is scoped to (see full definition in [docs/SPECS.md](docs/SPECS.md) §1.1):
+
+* 2 debaters (Pro vs Con)
+* 3 fixed rounds: opening, rebuttal, closing + mediator report
+* No automated web search (manual/placeholder only)
+* No billing (free plan only)
+* Single language: pt-BR
+
+---
+
 ## Current Status
 
 This project is under active development.
@@ -52,6 +64,20 @@ The initial version focuses on:
 * Fixed debate rounds
 * Mediator summary report
 * Streaming execution
+
+---
+
+## Getting Started
+
+* **Backend** (FastAPI) will live under `backend/`.
+* **Frontend** (Next.js) will live under `frontend/`.
+* Run commands will be documented here once the first boilerplate is in place.
+
+---
+
+## Documentation
+
+* [Technical Specification (SPECS)](docs/SPECS.md) — domain, API, persistence, roadmap.
 
 ---
 
