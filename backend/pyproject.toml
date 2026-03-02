@@ -25,5 +25,5 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["src/logos_arena_backend"]
 
