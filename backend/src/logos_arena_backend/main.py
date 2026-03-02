@@ -7,6 +7,7 @@ from logos_arena_backend.schemas.debate import (
     DebateRoundsResponse,
     DebateResponse,
     ReportResponse,
+    RoundResponse,
     RunDebateResponse,
 )
 from logos_arena_backend.store import (
@@ -19,6 +20,10 @@ from logos_arena_backend.store import (
 from logos_arena_backend.orchestrator import run_debate as orchestrate_run
 
 app = FastAPI(title="LogosArena Backend", version="0.1.0")
+
+
+def _error_payload(message: str, code: str) -> dict[str, str]:
+    return {"detail": message, "code": code}
 
 
 @app.get("/health", tags=["health"])
@@ -44,7 +49,13 @@ def post_debates(body: CreateDebateRequest) -> DebateResponse:
 @app.get("/debates", response_model=DebateListResponse, tags=["debates"])
 def get_debates_list(page: int = 1, per_page: int = 20) -> DebateListResponse:
     if page < 1 or per_page < 1 or per_page > 100:
-        raise HTTPException(status_code=400, detail="page e per_page devem ser positivos; per_page máx 100")
+        raise HTTPException(
+            status_code=400,
+            detail=_error_payload(
+                message="page e per_page devem ser positivos; per_page máx 100",
+                code="INVALID_PAGINATION",
+            ),
+        )
     items, total = list_debates(page=page, per_page=per_page)
     return DebateListResponse(
         items=[
@@ -67,7 +78,10 @@ def get_debates_list(page: int = 1, per_page: int = 20) -> DebateListResponse:
 def get_debate_by_id(debate_id: str) -> DebateResponse:
     record = get_debate(debate_id)
     if record is None:
-        raise HTTPException(status_code=404, detail="Debate não encontrado.", headers={"X-Code": "DEBATE_NOT_FOUND"})
+        raise HTTPException(
+            status_code=404,
+            detail=_error_payload(message="Debate não encontrado.", code="DEBATE_NOT_FOUND"),
+        )
     return DebateResponse(
         id=record["id"],
         status=record["status"],
@@ -91,16 +105,16 @@ def run_debate_endpoint(debate_id: str) -> RunDebateResponse:
     if record is None:
         raise HTTPException(
             status_code=404,
-            detail="Debate não encontrado.",
-            headers={"X-Code": "DEBATE_NOT_FOUND"},
+            detail=_error_payload(message="Debate não encontrado.", code="DEBATE_NOT_FOUND"),
         )
     if record["status"] != "draft":
         raise HTTPException(
             status_code=409,
-            detail="Debate não está em draft.",
-            headers={"X-Code": "DEBATE_NOT_DRAFT"},
+            detail=_error_payload(message="Debate não está em draft.", code="DEBATE_NOT_DRAFT"),
         )
 
+    # MVP: execução síncrona; retornamos o status final (completed/failed),
+    # embora a spec original mencione "queued".
     result = orchestrate_run(debate_id)
     return RunDebateResponse(job_id=result.debate_id, status=result.status)
 
@@ -111,10 +125,10 @@ def get_debate_rounds_endpoint(debate_id: str) -> DebateRoundsResponse:
     if record is None:
         raise HTTPException(
             status_code=404,
-            detail="Debate não encontrado.",
-            headers={"X-Code": "DEBATE_NOT_FOUND"},
+            detail=_error_payload(message="Debate não encontrado.", code="DEBATE_NOT_FOUND"),
         )
-    return DebateRoundsResponse(rounds=get_debate_rounds(debate_id))
+    raw_rounds = get_debate_rounds(debate_id)
+    return DebateRoundsResponse(rounds=[RoundResponse(**r) for r in raw_rounds])
 
 
 @app.get("/debates/{debate_id}/report", response_model=ReportResponse, tags=["debates"])
@@ -123,9 +137,9 @@ def get_debate_report_endpoint(debate_id: str) -> ReportResponse:
     if record is None:
         raise HTTPException(
             status_code=404,
-            detail="Debate não encontrado.",
-            headers={"X-Code": "DEBATE_NOT_FOUND"},
+            detail=_error_payload(message="Debate não encontrado.", code="DEBATE_NOT_FOUND"),
         )
+    # MVP: se o debate ainda não rodou (ou falhou sem relatório), retornamos 200 com content_md vazio.
     report = get_debate_report(debate_id)
     return ReportResponse(content_md=report.get("content_md", ""))
 
@@ -136,11 +150,12 @@ def get_debate_events_endpoint(debate_id: str) -> None:
     if record is None:
         raise HTTPException(
             status_code=404,
-            detail="Debate não encontrado.",
-            headers={"X-Code": "DEBATE_NOT_FOUND"},
+            detail=_error_payload(message="Debate não encontrado.", code="DEBATE_NOT_FOUND"),
         )
     raise HTTPException(
         status_code=501,
-        detail="SSE ainda não implementado neste MVP.",
-        headers={"X-Code": "DEBATE_EVENTS_NOT_IMPLEMENTED"},
+        detail=_error_payload(
+            message="SSE ainda não implementado neste MVP.",
+            code="DEBATE_EVENTS_NOT_IMPLEMENTED",
+        ),
     )

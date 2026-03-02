@@ -47,9 +47,9 @@ def _extract_content(response: Any) -> str:
 def run_debate(debate_id: str) -> DebateRunResult:
     """Executa o debate completo (3 rounds + mediação) de forma síncrona.
 
-    MVP: apenas muda o status de draft -> running -> completed e faz
-    chamadas de LLM para simular os três rounds, sem ainda persistir
-    cada mensagem individualmente.
+    Atualiza o status (draft -> running -> completed/failed),
+    chama o LLM para Pro/Con em cada round e para o mediador,
+    e persiste rounds + relatório em memória via store.
     """
     record = get_debate(debate_id)
     if record is None:

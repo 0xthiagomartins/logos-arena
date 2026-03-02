@@ -54,6 +54,7 @@ def save_debate_rounds_and_report(
         return
     record["rounds"] = rounds
     record["report"] = report
+    record["current_round_index"] = len(rounds)
     record["updated_at"] = _now_iso()
 
 
