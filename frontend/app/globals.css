@@ -10,7 +10,7 @@
 }
 
 body {
-  @apply bg-matrix-black text-matrix-green font-mono antialiased;
+  @apply bg-matrix-black text-white font-mono antialiased;
 }
 
 .markdown-content h1,
@@ -20,7 +20,7 @@ body {
 }
 
 .markdown-content p {
-  @apply my-2 text-matrix-green;
+  @apply my-2 text-white/90;
 }
 
 .markdown-content ul,
@@ -33,7 +33,7 @@ body {
 }
 
 .markdown-content strong {
-  @apply text-matrix-dim;
+  @apply text-white;
 }
 
 .markdown-content a {
@@ -41,7 +41,7 @@ body {
 }
 
 .markdown-content code {
-  @apply rounded bg-matrix-muted/30 px-1 py-0.5 text-xs;
+  @apply rounded bg-white/10 px-1 py-0.5 text-xs text-white;
 }
 
 .step-indeterminate {

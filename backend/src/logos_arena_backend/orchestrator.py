@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Iterator, Literal
 
 from logos_arena_backend.llm_provider import generate as llm_generate
 from logos_arena_backend.store import (
@@ -235,6 +235,18 @@ def _generate_step_summary(question: str, round_data: dict[str, Any]) -> str:
     return _extract_content(response)
 
 
+def _chunk_text(text: str, chunk_size: int = 28) -> list[str]:
+    words = text.split()
+    if not words:
+        return [""]
+    chunks: list[str] = []
+    for i in range(0, len(words), chunk_size):
+        piece = " ".join(words[i : i + chunk_size]).strip()
+        if piece:
+            chunks.append(f"{piece} ")
+    return chunks
+
+
 def _rounds_as_text(rounds: list[dict[str, Any]]) -> str:
     return "\n\n".join(
         [
@@ -342,6 +354,121 @@ def run_next_step(debate_id: str) -> DebateStepResult:
             report={"content_md": report_content},
             status="completed",
         )
+    except DebateStepError:
+        raise
+    except Exception:
+        update_debate_status(debate_id, "failed")
+        raise
+
+
+def run_next_step_stream(debate_id: str) -> Iterator[dict[str, Any]]:
+    record = get_debate(debate_id)
+    if record is None:
+        raise DebateStepError(status_code=404, code="DEBATE_NOT_FOUND", message="Debate não encontrado.")
+
+    status = record.get("status", "")
+    if status in {"completed", "failed"}:
+        raise DebateStepError(
+            status_code=409,
+            code="DEBATE_ALREADY_FINISHED",
+            message="Debate já finalizado; não há próximo step.",
+        )
+    if status not in {"draft", "running"}:
+        raise DebateStepError(
+            status_code=409,
+            code="DEBATE_NOT_DRAFT",
+            message="Debate não está em estado executável.",
+        )
+
+    question = record["question"]
+    rounds = record.get("rounds", [])
+    report = record.get("report", {}) or {}
+    system_prompt_debater, mediator_system_prompt = _build_system_prompts(record)
+
+    try:
+        if len(rounds) < 3:
+            if status == "draft":
+                update_debate_status(debate_id, "running")
+            round_index = len(rounds)
+            round_type = ROUND_TYPES[round_index]
+            yield {"event": "phase", "data": {"phase": "round_start", "round_index": round_index, "round_type": round_type}}
+
+            round_data = _generate_round(
+                question=question,
+                round_index=round_index,
+                system_prompt_debater=system_prompt_debater,
+                rounds_so_far=rounds,
+            )
+
+            pro_text = round_data["messages"][0]["content"]
+            con_text = round_data["messages"][1]["content"]
+
+            yield {
+                "event": "message_start",
+                "data": {"target": "debater_a", "round_index": round_index, "round_type": round_type},
+            }
+            for chunk in _chunk_text(pro_text):
+                yield {"event": "message_chunk", "data": {"target": "debater_a", "chunk": chunk}}
+            yield {"event": "message_end", "data": {"target": "debater_a"}}
+
+            yield {
+                "event": "message_start",
+                "data": {"target": "debater_b", "round_index": round_index, "round_type": round_type},
+            }
+            for chunk in _chunk_text(con_text):
+                yield {"event": "message_chunk", "data": {"target": "debater_b", "chunk": chunk}}
+            yield {"event": "message_end", "data": {"target": "debater_b"}}
+
+            yield {"event": "phase", "data": {"phase": "summary_start", "round_index": round_index}}
+            step_summary = _generate_step_summary(question=question, round_data=round_data)
+            yield {"event": "message_start", "data": {"target": "step_summary", "round_index": round_index}}
+            for chunk in _chunk_text(step_summary, chunk_size=24):
+                yield {"event": "message_chunk", "data": {"target": "step_summary", "chunk": chunk}}
+            yield {"event": "message_end", "data": {"target": "step_summary"}}
+
+            append_round_and_summary(debate_id=debate_id, round_data=round_data, step_summary=step_summary)
+            yield {
+                "event": "step_done",
+                "data": {
+                    "step_type": "round",
+                    "round_index": round_index,
+                    "round": round_data,
+                    "step_summary": step_summary,
+                    "status": "running",
+                },
+            }
+            return
+
+        if report.get("content_md"):
+            raise DebateStepError(
+                status_code=409,
+                code="DEBATE_ALREADY_FINISHED",
+                message="Debate já finalizado; não há próximo step.",
+            )
+
+        if status == "draft":
+            update_debate_status(debate_id, "running")
+        yield {"event": "phase", "data": {"phase": "mediation_start"}}
+        report_content = _generate_mediator_report(
+            question=question,
+            rounds=rounds,
+            mediator_system_prompt=mediator_system_prompt,
+        )
+        yield {"event": "message_start", "data": {"target": "report"}}
+        for chunk in _chunk_text(report_content, chunk_size=32):
+            yield {"event": "message_chunk", "data": {"target": "report", "chunk": chunk}}
+        yield {"event": "message_end", "data": {"target": "report"}}
+
+        save_debate_report(debate_id=debate_id, report={"content_md": report_content})
+        update_debate_status(debate_id, "completed")
+        yield {
+            "event": "step_done",
+            "data": {
+                "step_type": "mediation",
+                "report": {"content_md": report_content},
+                "status": "completed",
+            },
+        }
     except DebateStepError:
         raise
     except Exception:

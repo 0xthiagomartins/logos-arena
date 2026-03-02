@@ -53,21 +53,21 @@ export default function DebatesPage() {
     <main className="mx-auto min-h-screen w-full max-w-6xl px-6 py-10">
       <div className="mb-8 flex items-end justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-matrix-green">Meus debates</h1>
-          <p className="mt-1 text-sm text-matrix-dim">
+          <h1 className="text-3xl font-bold text-white">Meus debates</h1>
+          <p className="mt-1 text-sm text-white/75">
             {loading ? "Carregando debates..." : "Acompanhe o progresso e retome quando quiser."}
           </p>
         </div>
         <Link
           href="/debates/new"
-          className="rounded-lg border border-matrix-dim bg-matrix-muted/20 px-4 py-2 text-sm font-bold text-matrix-dim transition hover:bg-matrix-muted/35"
+          className="rounded-lg border border-white/15 bg-white/[0.04] px-4 py-2 text-sm font-bold text-white/85 transition hover:bg-white/[0.08]"
         >
           Novo debate
         </Link>
       </div>
 
       {error && (
-        <div className="mb-5 rounded-lg border border-matrix-dim/60 bg-matrix-muted/20 px-4 py-3 text-sm text-matrix-dim">
+        <div className="mb-5 rounded-lg border border-white/20 bg-white/[0.04] px-4 py-3 text-sm text-white/85">
           {error}
         </div>
       )}
@@ -79,7 +79,7 @@ export default function DebatesPage() {
           ))}
         </div>
       ) : items.length === 0 ? (
-        <div className="rounded-xl border border-matrix-dim/50 bg-matrix-dark/60 p-8 text-sm text-matrix-dim">
+        <div className="rounded-xl border border-white/15 bg-white/[0.04] p-8 text-sm text-white/75">
           Nenhum debate ainda. Crie o primeiro para começar.
         </div>
       ) : (
@@ -88,18 +88,18 @@ export default function DebatesPage() {
             <Link
               key={debate.id}
               href={`/debates/${debate.id}`}
-              className="rounded-xl border border-matrix-dim/50 bg-matrix-dark/70 p-4 transition hover:border-matrix-green/80 hover:bg-matrix-dark"
+              className="rounded-xl border border-white/15 bg-white/[0.04] p-4 transition hover:border-matrix-green/70 hover:bg-white/[0.07]"
             >
               <p className="mb-2 text-xs uppercase tracking-[0.2em] text-matrix-dim">
                 {statusLabel(debate.status)}
               </p>
-              <h2 className="mb-2 max-h-14 overflow-hidden text-lg font-bold text-matrix-green">
+              <h2 className="mb-2 max-h-14 overflow-hidden text-lg font-bold text-white">
                 {debate.title}
               </h2>
-              <p className="max-h-16 overflow-hidden text-sm leading-relaxed text-matrix-dim">
+              <p className="max-h-16 overflow-hidden text-sm leading-relaxed text-white/75">
                 {debate.question}
               </p>
-              <p className="mt-4 text-xs text-matrix-dim/80">
+              <p className="mt-4 text-xs text-white/60">
                 {new Date(debate.created_at).toLocaleString("pt-BR")}
               </p>
             </Link>

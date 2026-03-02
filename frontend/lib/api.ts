@@ -61,6 +61,15 @@ export type StepMediationResponse = {
 
 export type StepResponse = StepRoundResponse | StepMediationResponse;
 
+export type StepStreamEvent =
+  | { event: "phase"; data: { phase: string; round_index?: number; round_type?: string } }
+  | { event: "message_start"; data: { target: "debater_a" | "debater_b" | "step_summary" | "report"; round_index?: number; round_type?: string } }
+  | { event: "message_chunk"; data: { target: "debater_a" | "debater_b" | "step_summary" | "report"; chunk: string } }
+  | { event: "message_end"; data: { target: "debater_a" | "debater_b" | "step_summary" | "report" } }
+  | { event: "step_done"; data: Record<string, unknown> }
+  | { event: "error"; data: { detail: string; code: string } }
+  | { event: "done"; data: { ok: boolean } };
+
 type CreateDebatePayload = {
   title: string;
   question: string;
@@ -143,4 +152,63 @@ export function runDebateStep(debateId: string): Promise<StepResponse> {
     method: "POST",
     body: JSON.stringify({}),
   });
+}
+
+export async function runDebateStepStream(
+  debateId: string,
+  onEvent: (event: StepStreamEvent) => void,
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/debates/${debateId}/step/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+    cache: "no-store",
+  });
+
+  if (!response.ok || !response.body) {
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+    throw new Error(normalizeErrorMessage(payload, `Erro HTTP ${response.status}`));
+  }
+
+  const decoder = new TextDecoder();
+  const reader = response.body.getReader();
+  let buffer = "";
+  let currentEvent = "message";
+
+  const dispatchBlock = (block: string) => {
+    const lines = block.split("\n");
+    let eventName = currentEvent;
+    let dataStr = "";
+    for (const line of lines) {
+      if (line.startsWith("event:")) {
+        eventName = line.slice(6).trim();
+      } else if (line.startsWith("data:")) {
+        dataStr += line.slice(5).trim();
+      }
+    }
+    currentEvent = eventName;
+    if (!dataStr) return;
+    const parsed = JSON.parse(dataStr) as Record<string, unknown>;
+    onEvent({ event: eventName as StepStreamEvent["event"], data: parsed } as StepStreamEvent);
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split("\n\n");
+    buffer = blocks.pop() ?? "";
+    for (const block of blocks) {
+      if (block.trim()) dispatchBlock(block);
+    }
+  }
+
+  if (buffer.trim()) {
+    dispatchBlock(buffer);
+  }
 }

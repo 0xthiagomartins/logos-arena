@@ -1,5 +1,8 @@
+import json
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from logos_arena_backend.schemas.debate import (
     CreateDebateRequest,
@@ -25,6 +28,7 @@ from logos_arena_backend.orchestrator import (
     DebateStepError,
     run_debate as orchestrate_run,
     run_next_step as orchestrate_next_step,
+    run_next_step_stream as orchestrate_next_step_stream,
 )
 
 app = FastAPI(title="LogosArena Backend", version="0.1.0")
@@ -168,6 +172,32 @@ def run_debate_step_endpoint(debate_id: str) -> StepRoundResponse | StepMediatio
         step_type="mediation",
         report=ReportResponse(**(result.report or {})),
         status=result.status or "completed",
+    )
+
+
+def _sse_event(event: str, data: dict[str, object]) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+@app.post("/debates/{debate_id}/step/stream", tags=["debates"])
+def run_debate_step_stream_endpoint(debate_id: str) -> StreamingResponse:
+    def _event_generator():
+        try:
+            for item in orchestrate_next_step_stream(debate_id):
+                yield _sse_event(item["event"], item["data"])
+            yield _sse_event("done", {"ok": True})
+        except DebateStepError as exc:
+            yield _sse_event("error", _error_payload(message=exc.message, code=exc.code))
+        except Exception:
+            yield _sse_event(
+                "error",
+                _error_payload(message="Falha inesperada ao executar step.", code="STEP_STREAM_FAILED"),
+            )
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )
 
 
