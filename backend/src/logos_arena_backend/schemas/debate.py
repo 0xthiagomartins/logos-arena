@@ -55,3 +55,8 @@ class DebateListResponse(BaseModel):
     total: int
     page: int
     per_page: int
+
+
+class RunDebateResponse(BaseModel):
+    job_id: str
+    status: str

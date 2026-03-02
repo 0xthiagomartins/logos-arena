@@ -5,8 +5,10 @@ from logos_arena_backend.schemas.debate import (
     DebateListItem,
     DebateListResponse,
     DebateResponse,
+    RunDebateResponse,
 )
 from logos_arena_backend.store import create_debate, get_debate, list_debates
+from logos_arena_backend.orchestrator import run_debate as orchestrate_run
 
 app = FastAPI(title="LogosArena Backend", version="0.1.0")
 
@@ -68,4 +70,29 @@ def get_debate_by_id(debate_id: str) -> DebateResponse:
         created_at=record["created_at"],
         updated_at=record["updated_at"],
     )
+
+
+@app.post(
+    "/debates/{debate_id}/run",
+    response_model=RunDebateResponse,
+    status_code=202,
+    tags=["debates"],
+)
+def run_debate_endpoint(debate_id: str) -> RunDebateResponse:
+    record = get_debate(debate_id)
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Debate não encontrado.",
+            headers={"X-Code": "DEBATE_NOT_FOUND"},
+        )
+    if record["status"] != "draft":
+        raise HTTPException(
+            status_code=409,
+            detail="Debate não está em draft.",
+            headers={"X-Code": "DEBATE_NOT_DRAFT"},
+        )
+
+    result = orchestrate_run(debate_id)
+    return RunDebateResponse(job_id=result.debate_id, status=result.status)
 

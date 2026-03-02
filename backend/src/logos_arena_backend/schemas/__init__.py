@@ -5,6 +5,7 @@ from logos_arena_backend.schemas.debate import (
     DebateListResponse,
     DebateResponse,
     MediatorPrefs,
+    RunDebateResponse,
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "DebateListResponse",
     "DebateResponse",
     "MediatorPrefs",
+    "RunDebateResponse",
 ]

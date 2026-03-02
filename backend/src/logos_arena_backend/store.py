@@ -34,6 +34,14 @@ def get_debate(debate_id: str) -> dict[str, Any] | None:
     return _debates.get(debate_id)
 
 
+def update_debate_status(debate_id: str, status: str) -> None:
+    record = _debates.get(debate_id)
+    if record is None:
+        return
+    record["status"] = status
+    record["updated_at"] = _now_iso()
+
+
 def list_debates(page: int = 1, per_page: int = 20) -> tuple[list[dict[str, Any]], int]:
     items = sorted(_debates.values(), key=lambda d: d["created_at"], reverse=True)
     total = len(items)
