@@ -1,7 +1,3 @@
-Aqui está um README direto ao ponto, técnico e objetivo:
-
----
-
 # LogosArena
 
 Structured AI-powered debate engine for controversial and complex questions.
