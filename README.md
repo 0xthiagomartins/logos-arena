@@ -1,4 +1,4 @@
-[![Logos Arena](assets/banner.png)](assets/banner.png)
+[![Logos Arena](https://raw.githubusercontent.com/0xthiagomartins/logos-arena/refs/heads/main/assets/logosArenaBanner.png)](https://raw.githubusercontent.com/0xthiagomartins/logos-arena/refs/heads/main/assets/logosArenaBanner.png)
 
 **Structured AI-powered debate engine** for controversial and complex questions. Two sides, fixed rounds, a mediator agent, and explainable outcomes.
 
