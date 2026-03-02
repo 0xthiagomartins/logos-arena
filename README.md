@@ -1,91 +1,78 @@
 # LogosArena
 
-Structured AI-powered debate engine for controversial and complex questions.
+[![LogosArena](banner.png)](banner.png)
 
-⚠️ **Status: In Development**
+**Structured AI-powered debate engine** for controversial and complex questions. Two sides, fixed rounds, a mediator agent, and explainable outcomes.
 
----
-
-## Overview
-
-LogosArena is a SaaS platform designed to structure debates using multiple AI agents with defined roles and controlled reasoning flows.
-
-Instead of unstructured chat responses, the system enforces:
-
-* Formal debate rounds (opening, rebuttal, closing)
-* Defined debater personas
-* A mediator agent that synthesizes logic
-* Structured outputs (claims, supports, attacks, assumptions)
-* Optional evidence retrieval (web search in future plans)
-
-The goal is to transform divisive questions into traceable, auditable reasoning processes.
+![Status](https://img.shields.io/badge/status-in%20development-yellow) ![Backend](https://img.shields.io/badge/backend-FastAPI-009688) ![Frontend](https://img.shields.io/badge/frontend-Next.js%2015-000000) ![LLM](https://img.shields.io/badge/LLM-LiteLLM%20%7C%20OpenAI-412991)
 
 ---
 
-## Core Concepts
+## What it is
 
-* **Debaters**: AI agents with explicit stance and style.
-* **Mediator**: Synthesizes arguments and enforces rules.
-* **Debate Engine**: State-machine driven rounds.
-* **Structured Reasoning**: JSON-based output contracts.
-* **Evidence Layer** (planned): Web-backed citations.
+LogosArena turns polarising questions into **structured debates**: Pro vs Con, multiple rounds (opening → rebuttal → closing), and a **mediator** that summarises and scores the arguments. You get a final report instead of a single opaque answer.
 
----
-
-## Planned Stack
-
-* Backend: FastAPI (Python)
-* Frontend: Next.js
-* Database: PostgreSQL
-* Queue/Jobs: Redis
-* LLM Provider abstraction (multi-model support)
+- **Step-by-step flow**: Run one round at a time, read a short **quality summary** per round, then click *Continuar* to generate the next.
+- **Run full debate**: Or execute all rounds + mediation in one go.
+- **Cypherpunk-style UI**: JetBrains Mono, green-on-black theme (Next.js + Tailwind).
 
 ---
 
-## MVP Scope
+## Tech stack
 
-The first release is scoped to (see full definition in [context/specs/01-domain-config.md](context/specs/01-domain-config.md) §1.1):
-
-* 2 debaters (Pro vs Con)
-* 3 fixed rounds: opening, rebuttal, closing + mediator report
-* No automated web search (manual/placeholder only)
-* No billing (free plan only)
-* Single language: pt-BR
+| Layer    | Stack |
+|----------|--------|
+| Backend  | FastAPI (Python 3.14+), LiteLLM, in-memory store (MVP) |
+| Frontend | Next.js 15, React 19, TypeScript, Tailwind CSS |
+| LLM      | OpenAI `gpt-4o-mini` (MVP); multi-model later |
 
 ---
 
-## Current Status
+## Quick start
 
-This project is under active development.
+**Backend**
 
-The initial version focuses on:
+```bash
+cd backend
+uv sync
+cp .env.example .env   # set OPENAI_API_KEY
+uv run uvicorn logos_arena_backend.main:app --reload
+```
 
-* Two debaters (Pro vs Con)
-* Fixed debate rounds
-* Mediator summary report
-* Streaming execution
+API: `http://localhost:8000` — see [context/specs/03-api-persistence.md](context/specs/03-api-persistence.md) for endpoints.
+
+**Frontend**
+
+```bash
+cd frontend
+cp .env.example .env   # NEXT_PUBLIC_API_URL=http://localhost:8000
+npm install
+npm run dev
+```
+
+App: `http://localhost:3000`.
 
 ---
 
-## Getting Started
+## MVP scope
 
-* **Backend** (FastAPI) will live under `backend/`.
-* **Frontend** (Next.js) will live under `frontend/`.
-* Run commands will be documented here once the first boilerplate is in place.
+- **2 debaters** (Pro vs Con), **3 rounds** (opening, rebuttal, closing) + mediator report.
+- **POST /debates** — create debate (draft).
+- **POST /debates/{id}/step** — run next step (one round or mediation); returns round + quality summary.
+- **POST /debates/{id}/run** — run full debate in one request.
+- **GET /debates/{id}/rounds** — list rounds + `round_summaries`.
+- **GET /debates/{id}/report** — mediator report (Markdown).
+- No auth, no billing, no web search in MVP.
 
 ---
 
-## Documentation
+## Docs
 
-* [User guide (non-technical users)](docs/README.md) — how to use LogosArena in plain language.
-* [Technical specification (for devs/agents)](context/README.md) — domain, API, persistence, roadmap (context/specs/).
+- [User guide](docs/README.md) — for end users (plain language).
+- [Context for devs/agents](context/README.md) — specs, API, and roadmap (`context/specs/`).
 
 ---
 
 ## Vision
 
-Move from simple AI conversations to structured, logic-driven debate systems with explainable outcomes.
-
----
-
-More documentation and implementation details will be added as development progresses.
+Move from ad-hoc AI chat to **structured, logic-driven debates** with traceable reasoning and explainable outcomes.

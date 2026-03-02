@@ -37,6 +37,16 @@ type CarouselSlide =
   | { kind: "round"; round: RoundResponse; summary: string }
   | { kind: "draft"; draft: StreamingDraft };
 
+type ParsedMediatorReport = {
+  pro: string;
+  con: string;
+  analysis: string;
+  conclusion: string;
+  finalOutcome: "pro" | "con" | "inconclusivo" | "depende" | null;
+};
+
+type MediatorSectionKey = "pro" | "con" | "analysis" | "conclusion";
+
 function RunnerSkeleton() {
   return (
     <div className="grid gap-5 lg:grid-cols-3">
@@ -129,6 +139,145 @@ function DraftCard({ draft }: { draft: StreamingDraft }) {
         </div>
       </details>
     </article>
+  );
+}
+
+function parseMediatorReport(content: string): ParsedMediatorReport | null {
+  const normalized = content.replace(/\r/g, "");
+  const sections = [
+    {
+      key: "pro" as const,
+      headings: [
+        "Resumo dos argumentos do lado Pro:",
+        "**Resumo dos argumentos do lado Pro**",
+        "Resumo dos argumentos do lado Pro",
+      ],
+    },
+    {
+      key: "con" as const,
+      headings: [
+        "Resumo dos argumentos do lado Contra:",
+        "**Resumo dos argumentos do lado Contra**",
+        "Resumo dos argumentos do lado Contra",
+      ],
+    },
+    {
+      key: "analysis" as const,
+      headings: ["Análise crítica:", "**Análise crítica**", "Análise crítica"],
+    },
+    {
+      key: "conclusion" as const,
+      headings: ["Conclusão:", "**Conclusão**", "Conclusão"],
+    },
+  ];
+
+  const starts = sections
+    .map((section) => {
+      const index = section.headings
+        .map((h) => normalized.indexOf(h))
+        .filter((i) => i >= 0)
+        .sort((a, b) => a - b)[0];
+      return { key: section.key, index };
+    })
+    .filter((x): x is { key: MediatorSectionKey; index: number } => typeof x.index === "number");
+
+  if (starts.length < 3) return null;
+  starts.sort((a, b) => a.index - b.index);
+
+  const contentByKey: Record<MediatorSectionKey, string> = {
+    pro: "",
+    con: "",
+    analysis: "",
+    conclusion: "",
+  };
+
+  for (let i = 0; i < starts.length; i += 1) {
+    const current = starts[i];
+    const next = starts[i + 1];
+    const rawSlice = normalized.slice(current.index, next ? next.index : undefined).trim();
+    const cleaned = rawSlice.replace(/^\*{0,2}[^:\n]+\*{0,2}:?\s*/m, "").trim();
+    contentByKey[current.key] = cleaned;
+  }
+
+  const outcomeMatch = normalized.match(/final_outcome:\s*(pro|con|inconclusivo|depende)/i);
+  const finalOutcome = outcomeMatch ? (outcomeMatch[1].toLowerCase() as ParsedMediatorReport["finalOutcome"]) : null;
+
+  return {
+    pro: contentByKey.pro,
+    con: contentByKey.con,
+    analysis: contentByKey.analysis,
+    conclusion: contentByKey.conclusion,
+    finalOutcome,
+  };
+}
+
+function outcomeLabel(outcome: ParsedMediatorReport["finalOutcome"]): string {
+  if (outcome === "pro") return "Resultado: PRO";
+  if (outcome === "con") return "Resultado: CON";
+  if (outcome === "depende") return "Resultado: DEPENDE";
+  if (outcome === "inconclusivo") return "Resultado: INCONCLUSIVO";
+  return "Resultado: sem classificação";
+}
+
+function firstParagraph(text: string): string {
+  const cleaned = text.trim();
+  if (!cleaned) return "";
+  const parts = cleaned.split(/\n\s*\n/);
+  return parts[0] ?? cleaned;
+}
+
+function MediatorReportView({ content }: { content: string }) {
+  const parsed = useMemo(() => parseMediatorReport(content), [content]);
+
+  if (!parsed) {
+    return <MarkdownContent content={content} />;
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg border border-matrix-green/50 bg-matrix-muted/25 p-4">
+        <p className="text-xs uppercase tracking-[0.18em] text-matrix-dim">{outcomeLabel(parsed.finalOutcome)}</p>
+        {parsed.conclusion && (
+          <p className="mt-2 text-sm leading-relaxed text-white/90">{firstParagraph(parsed.conclusion)}</p>
+        )}
+      </div>
+
+      <details className="rounded-lg border border-white/10 bg-white/[0.03] p-3" open>
+        <summary className="cursor-pointer list-none text-xs uppercase tracking-[0.15em] text-matrix-dim">
+          Resumo Pro
+        </summary>
+        <div className="mt-3">
+          <MarkdownContent content={parsed.pro || "_Sem conteúdo._"} />
+        </div>
+      </details>
+
+      <details className="rounded-lg border border-white/10 bg-white/[0.03] p-3" open>
+        <summary className="cursor-pointer list-none text-xs uppercase tracking-[0.15em] text-matrix-dim">
+          Resumo Contra
+        </summary>
+        <div className="mt-3">
+          <MarkdownContent content={parsed.con || "_Sem conteúdo._"} />
+        </div>
+      </details>
+
+      <details className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+        <summary className="cursor-pointer list-none text-xs uppercase tracking-[0.15em] text-matrix-dim">
+          Análise Crítica
+        </summary>
+        <div className="mt-3">
+          <MarkdownContent content={parsed.analysis || "_Sem conteúdo._"} />
+        </div>
+      </details>
+
+      <details className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+        <summary className="cursor-pointer list-none text-xs uppercase tracking-[0.15em] text-matrix-dim">
+          Conclusão Completa
+        </summary>
+        <div className="mt-3">
+          <MarkdownContent content={parsed.conclusion || "_Sem conteúdo._"} />
+        </div>
+      </details>
+    </div>
   );
 }
 
@@ -353,127 +502,129 @@ export default function DebateRunnerPage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-7xl px-6 pb-32 pt-8">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <Link href="/debates" className="text-sm text-white/70 underline">
-            Voltar para meus debates
-          </Link>
-          <h1 className="mt-2 text-2xl font-bold text-white md:text-3xl">
-            {state.debate?.title ?? "Preparando debate..."}
-          </h1>
-          <p className="mt-1 text-sm text-white/70">
-            {initialLoading ? "Preparando debate..." : normalizeStatus(status)}
+    <main className="min-h-screen px-3 pb-36 pt-6 sm:px-4 sm:pt-8 md:px-6">
+      <div className="mx-auto w-full max-w-6xl">
+        <div className="mb-6 flex flex-col gap-3 sm:mb-7">
+          <div>
+            <Link href="/debates" className="text-sm text-white/70 underline">
+              Voltar para meus debates
+            </Link>
+            <h1 className="mt-2 text-xl font-bold text-white sm:text-2xl md:text-3xl">
+              {state.debate?.title ?? "Preparando debate..."}
+            </h1>
+            <p className="mt-1 text-sm text-white/70">
+              {initialLoading ? "Preparando debate..." : normalizeStatus(status)}
+            </p>
+          </div>
+        </div>
+
+        <div className="mb-5 rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm sm:mb-6 sm:p-5">
+          <p className="mb-1 text-xs uppercase tracking-[0.2em] text-matrix-dim">Tese</p>
+          <p className="text-sm leading-relaxed text-white sm:text-base">
+            {state.debate?.question ?? "Carregando pergunta do debate..."}
           </p>
         </div>
-      </div>
 
-      <div className="mb-6 rounded-xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-        <p className="mb-1 text-xs uppercase tracking-[0.2em] text-matrix-dim">Tese</p>
-        <p className="text-base leading-relaxed text-white">
-          {state.debate?.question ?? "Carregando pergunta do debate..."}
-        </p>
-      </div>
+        {error && (
+          <div className="mb-5 rounded-lg border border-white/20 bg-white/5 px-4 py-3 text-sm text-white/90 backdrop-blur-sm sm:mb-6">
+            {error}
+          </div>
+        )}
 
-      {error && (
-        <div className="mb-6 rounded-lg border border-white/20 bg-white/5 px-4 py-3 text-sm text-white/90 backdrop-blur-sm">
-          {error}
-        </div>
-      )}
+        {initialLoading ? (
+          <RunnerSkeleton />
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-3 lg:gap-5">
+            <section className="space-y-4 lg:col-span-2">
+              {slides.length === 0 ? (
+                <div className="rounded-xl border border-white/10 bg-white/5 p-5 text-sm text-white/75 backdrop-blur-sm sm:p-6">
+                  Sem rounds ainda. Clique em <strong className="text-matrix-green">Continuar</strong> para
+                  iniciar.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="overflow-hidden" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+                    <div
+                      className="flex transition-transform duration-500 ease-out"
+                      style={{
+                        width: `${Math.max(slides.length, 1) * 100}%`,
+                        transform: `translateX(-${activeSlide * (100 / Math.max(slides.length, 1))}%)`,
+                      }}
+                    >
+                      {slides.map((slide, idx) => (
+                        <div
+                          key={`${slide.kind}-${idx}`}
+                          className="shrink-0 px-0.5 sm:px-1"
+                          style={{ width: `${100 / Math.max(slides.length, 1)}%` }}
+                        >
+                          {slide.kind === "round" ? (
+                            <RoundCard round={slide.round} summary={slide.summary} />
+                          ) : (
+                            <DraftCard draft={slide.draft} />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
-      {initialLoading ? (
-        <RunnerSkeleton />
-      ) : (
-        <div className="grid gap-5 lg:grid-cols-3">
-          <section className="space-y-4 lg:col-span-2">
-            {slides.length === 0 ? (
-              <div className="rounded-xl border border-white/10 bg-white/5 p-6 text-sm text-white/75 backdrop-blur-sm">
-                Sem rounds ainda. Clique em <strong className="text-matrix-green">Continuar</strong> para
-                iniciar.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="overflow-hidden" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-                  <div
-                    className="flex transition-transform duration-500 ease-out"
-                    style={{
-                      width: `${Math.max(slides.length, 1) * 100}%`,
-                      transform: `translateX(-${activeSlide * (100 / Math.max(slides.length, 1))}%)`,
-                    }}
-                  >
-                    {slides.map((slide, idx) => (
-                      <div
-                        key={`${slide.kind}-${idx}`}
-                        className="shrink-0 px-1"
-                        style={{ width: `${100 / Math.max(slides.length, 1)}%` }}
-                      >
-                        {slide.kind === "round" ? (
-                          <RoundCard round={slide.round} summary={slide.summary} />
-                        ) : (
-                          <DraftCard draft={slide.draft} />
-                        )}
-                      </div>
-                    ))}
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={goPrevSlide}
+                      disabled={activeSlide <= 0}
+                      className="rounded-md border border-white/15 px-3 py-1 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      ← Anterior
+                    </button>
+                    <p className="text-xs text-white/70">
+                      Round {activeSlide + 1} de {slides.length}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={goNextSlide}
+                      disabled={activeSlide >= slides.length - 1}
+                      className="rounded-md border border-white/15 px-3 py-1 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Próximo →
+                    </button>
                   </div>
                 </div>
+              )}
 
-                <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
-                  <button
-                    type="button"
-                    onClick={goPrevSlide}
-                    disabled={activeSlide <= 0}
-                    className="rounded-md border border-white/15 px-3 py-1 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    ← Anterior
-                  </button>
-                  <p className="text-xs text-white/70">
-                    Round {activeSlide + 1} de {slides.length}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={goNextSlide}
-                    disabled={activeSlide >= slides.length - 1}
-                    className="rounded-md border border-white/15 px-3 py-1 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    Próximo →
-                  </button>
+              {stepLoading && <StepLoadingWidget roundCount={state.rounds.length} />}
+            </section>
+
+            <aside className="rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm sm:p-5">
+              <p className="mb-3 text-xs uppercase tracking-[0.2em] text-matrix-dim">Mediador</p>
+              {reportLoading ? (
+                <div className="animate-pulse space-y-2">
+                  <div className="h-3 w-full rounded bg-white/10" />
+                  <div className="h-3 w-[92%] rounded bg-white/10" />
+                  <div className="h-3 w-[85%] rounded bg-white/10" />
+                  <div className="h-3 w-[70%] rounded bg-white/10" />
                 </div>
-              </div>
-            )}
+              ) : hasReport ? (
+                <MediatorReportView content={state.report?.content_md ?? ""} />
+              ) : (
+                <p className="text-sm leading-relaxed text-white/75">
+                  Aguardando mediação final. Gere os rounds com o botão Continuar.
+                </p>
+              )}
+            </aside>
+          </div>
+        )}
+      </div>
 
-            {stepLoading && <StepLoadingWidget roundCount={state.rounds.length} />}
-          </section>
-
-          <aside className="rounded-xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-            <p className="mb-3 text-xs uppercase tracking-[0.2em] text-matrix-dim">Mediador</p>
-            {reportLoading ? (
-              <div className="animate-pulse space-y-2">
-                <div className="h-3 w-full rounded bg-white/10" />
-                <div className="h-3 w-[92%] rounded bg-white/10" />
-                <div className="h-3 w-[85%] rounded bg-white/10" />
-                <div className="h-3 w-[70%] rounded bg-white/10" />
-              </div>
-            ) : hasReport ? (
-              <MarkdownContent content={state.report?.content_md ?? ""} />
-            ) : (
-              <p className="text-sm leading-relaxed text-white/75">
-                Aguardando mediação final. Gere os rounds com o botão Continuar.
-              </p>
-            )}
-          </aside>
-        </div>
-      )}
-
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-matrix-black/85 p-4 backdrop-blur-md">
-        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
-          <p className="hidden text-sm text-white/70 md:block">
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-matrix-black/85 p-3 backdrop-blur-md sm:p-4">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <p className="text-xs text-white/70 sm:text-sm">
             {stepLoading ? "Executando próximo step em tempo real..." : "Continue para avançar o debate."}
           </p>
           <button
             type="button"
             onClick={onContinue}
             disabled={!canContinue}
-            className="inline-flex min-w-44 items-center justify-center gap-2 rounded-lg border border-matrix-green bg-matrix-green/15 px-5 py-3 text-sm font-bold text-white transition hover:bg-matrix-green/25 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-matrix-green bg-matrix-green/15 px-5 py-3 text-sm font-bold text-white transition hover:bg-matrix-green/25 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-44"
           >
             {stepLoading ? (
               <>
