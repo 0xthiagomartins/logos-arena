@@ -126,6 +126,15 @@ details[open] .expander-chevron {
   transform: rotate(180deg);
 }
 
+.modal-backdrop {
+  animation: modal-backdrop-in 180ms ease-out;
+}
+
+.modal-panel {
+  transform-origin: center;
+  animation: modal-panel-grow-in 220ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
 @keyframes step-indeterminate {
   0% {
     transform: translateX(-130%);
@@ -185,12 +194,37 @@ details[open] .expander-chevron {
   }
 }
 
+@keyframes modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-panel-grow-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   body::after {
     animation: none;
   }
 
   .matrix-stream {
+    animation: none;
+  }
+
+  .modal-backdrop,
+  .modal-panel {
     animation: none;
   }
 }

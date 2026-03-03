@@ -189,8 +189,8 @@ export default function DebatesPage() {
       )}
 
       {pendingDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-          <div className="w-full max-w-md rounded-xl border border-white/15 bg-matrix-black p-5 shadow-xl shadow-black/60">
+        <div className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="modal-panel w-full max-w-md rounded-xl border border-white/15 bg-matrix-black p-5 shadow-xl shadow-black/60">
             <h2 className="text-lg font-semibold text-white">Excluir debate?</h2>
             <p className="mt-2 text-sm leading-relaxed text-white/75">
               Essa ação remove o debate da galeria e não pode ser desfeita.
