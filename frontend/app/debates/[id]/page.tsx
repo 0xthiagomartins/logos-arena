@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type TouchEvent } from "react";
 import MarkdownContent from "@/components/markdown-content";
 import StepLoadingWidget from "@/components/step-loading-widget";
+import { useI18n } from "@/lib/i18n";
 import {
   getDebate,
   getDebateReport,
@@ -70,22 +71,30 @@ function RunnerSkeleton() {
   );
 }
 
-function normalizeStatus(status: string): string {
-  if (status === "draft") return "Rascunho";
-  if (status === "running") return "Em andamento";
-  if (status === "completed") return "Concluído";
-  if (status === "failed") return "Falhou";
+function normalizeStatus(status: string, t: (key: string) => string): string {
+  if (status === "draft") return t("status.draft");
+  if (status === "running") return t("status.running");
+  if (status === "completed") return t("status.completed");
+  if (status === "failed") return t("status.failed");
   return status;
 }
 
-function phaseText(phase: string): string {
-  if (phase === "round_start") return "Iniciando novo round...";
-  if (phase === "summary_start") return "Mediador analisando a qualidade do round...";
-  if (phase === "mediation_start") return "Mediador escrevendo o relatório final...";
-  return "Processando step...";
+function phaseText(phase: string, t: (key: string) => string): string {
+  if (phase === "round_start") return t("debate.phase.round_start");
+  if (phase === "summary_start") return t("debate.phase.summary_start");
+  if (phase === "mediation_start") return t("debate.phase.mediation_start");
+  return t("debate.phase.default");
 }
 
-function RoundCard({ round, summary }: { round: RoundResponse; summary: string }) {
+function RoundCard({
+  round,
+  summary,
+  t,
+}: {
+  round: RoundResponse;
+  summary: string;
+  t: (key: string) => string;
+}) {
   return (
     <article className="rounded-xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
       <p className="mb-3 text-xs uppercase tracking-[0.2em] text-matrix-dim">
@@ -103,12 +112,12 @@ function RoundCard({ round, summary }: { round: RoundResponse; summary: string }
       </div>
       <details className="mt-4 rounded-lg border border-white/15 bg-white/[0.04] p-4">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-matrix-dim">
-          <span>Clique para ver a síntese da rodada</span>
+          <span>{t("debate.show_round_summary")}</span>
           <span className="expander-chevron text-sm">⌄</span>
         </summary>
         <div className="expander-grid mt-3">
           <div className="overflow-hidden">
-            <MarkdownContent content={summary || "Resumo ainda não disponível para este round."} />
+            <MarkdownContent content={summary || t("debate.round_summary_fallback")} />
           </div>
         </div>
       </details>
@@ -116,7 +125,7 @@ function RoundCard({ round, summary }: { round: RoundResponse; summary: string }
   );
 }
 
-function DraftCard({ draft }: { draft: StreamingDraft }) {
+function DraftCard({ draft, t }: { draft: StreamingDraft; t: (key: string) => string }) {
   return (
     <article className="rounded-xl border border-white/15 bg-white/[0.06] p-5 backdrop-blur-sm">
       <p className="mb-2 text-xs uppercase tracking-[0.2em] text-matrix-dim">
@@ -126,21 +135,21 @@ function DraftCard({ draft }: { draft: StreamingDraft }) {
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-lg border border-white/10 bg-white/5 p-4">
           <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">Pro</p>
-          <MarkdownContent content={draft.pro || "_Gerando argumento..._"} />
+          <MarkdownContent content={draft.pro || t("debate.streaming_generating_argument")} />
         </div>
         <div className="rounded-lg border border-white/10 bg-white/5 p-4">
           <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">Con</p>
-          <MarkdownContent content={draft.con || "_Aguardando resposta..._"} />
+          <MarkdownContent content={draft.con || t("debate.streaming_waiting_response")} />
         </div>
       </div>
       <details className="mt-4 rounded-lg border border-white/15 bg-white/[0.04] p-4">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-matrix-dim">
-          <span>Clique para ver a síntese da rodada</span>
+          <span>{t("debate.show_round_summary")}</span>
           <span className="expander-chevron text-sm">⌄</span>
         </summary>
         <div className="expander-grid mt-3">
           <div className="overflow-hidden">
-            <MarkdownContent content={draft.summary || "_Mediador analisando..._"} />
+            <MarkdownContent content={draft.summary || t("debate.streaming_mediator_analyzing")} />
           </div>
         </div>
       </details>
@@ -237,12 +246,12 @@ function parseMediatorReport(content: string): ParsedMediatorReport | null {
   };
 }
 
-function outcomeLabel(outcome: ParsedMediatorReport["finalOutcome"]): string {
-  if (outcome === "pro") return "Resultado: PRO";
-  if (outcome === "con") return "Resultado: CON";
-  if (outcome === "depende") return "Resultado: DEPENDE";
-  if (outcome === "inconclusivo") return "Resultado: INCONCLUSIVO";
-  return "Resultado: sem classificação";
+function outcomeLabel(outcome: ParsedMediatorReport["finalOutcome"], t: (key: string) => string): string {
+  if (outcome === "pro") return t("debate.mediator_result_pro");
+  if (outcome === "con") return t("debate.mediator_result_con");
+  if (outcome === "depende") return t("debate.mediator_result_depende");
+  if (outcome === "inconclusivo") return t("debate.mediator_result_inconclusivo");
+  return t("debate.mediator_result_none");
 }
 
 function firstParagraph(text: string): string {
@@ -259,7 +268,7 @@ function removeFinalOutcomeLine(text: string): string {
     .trim();
 }
 
-function MediatorReportView({ content }: { content: string }) {
+function MediatorReportView({ content, t }: { content: string; t: (key: string) => string }) {
   const parsed = useMemo(() => parseMediatorReport(content), [content]);
 
   if (!parsed) {
@@ -271,35 +280,37 @@ function MediatorReportView({ content }: { content: string }) {
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-matrix-green/50 bg-matrix-muted/25 p-4">
-        <p className="text-xs uppercase tracking-[0.18em] text-matrix-dim">{outcomeLabel(parsed.finalOutcome)}</p>
+        <p className="text-xs uppercase tracking-[0.18em] text-matrix-dim">
+          {outcomeLabel(parsed.finalOutcome, t)}
+        </p>
         {cleanConclusion && (
           <p className="mt-2 text-sm leading-relaxed text-white/90">{firstParagraph(cleanConclusion)}</p>
         )}
       </div>
 
       <section className="space-y-2 rounded-lg border border-white/10 bg-white/[0.03] p-3">
-        <p className="text-xs uppercase tracking-[0.15em] text-matrix-dim">Resumo</p>
+        <p className="text-xs uppercase tracking-[0.15em] text-matrix-dim">{t("debate.mediator_summary")}</p>
         <div className="grid gap-3 md:grid-cols-2">
           <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
             <p className="mb-2 text-xs uppercase tracking-[0.12em] text-matrix-dim">Pro</p>
-            <MarkdownContent content={parsed.pro || "_Sem conteúdo._"} />
+            <MarkdownContent content={parsed.pro || t("debate.no_content")} />
           </div>
           <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
             <p className="mb-2 text-xs uppercase tracking-[0.12em] text-matrix-dim">Con</p>
-            <MarkdownContent content={parsed.con || "_Sem conteúdo._"} />
+            <MarkdownContent content={parsed.con || t("debate.no_content")} />
           </div>
         </div>
       </section>
 
       <details className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
         <summary className="cursor-pointer list-none text-xs uppercase tracking-[0.15em] text-matrix-dim">
-          Análise Crítica / Lógica
+          {t("debate.mediator_analysis_logic")}
         </summary>
         <div className="mt-3">
           <MarkdownContent
             content={
               removeFinalOutcomeLine([parsed.analysis, cleanConclusion].filter(Boolean).join("\n\n")) ||
-              "_Sem conteúdo._"
+              t("debate.no_content")
             }
           />
         </div>
@@ -308,23 +319,24 @@ function MediatorReportView({ content }: { content: string }) {
   );
 }
 
-function shortOutcomeLabel(outcome: ParsedMediatorReport["finalOutcome"]): string {
-  if (outcome === "pro") return "PRO";
-  if (outcome === "con") return "CON";
-  if (outcome === "depende") return "DEPENDE";
-  if (outcome === "inconclusivo") return "INCONCLUSIVO";
-  return "SEM RESULTADO";
+function shortOutcomeLabel(outcome: ParsedMediatorReport["finalOutcome"], t: (key: string) => string): string {
+  if (outcome === "pro") return t("debate.outcome.badge.pro");
+  if (outcome === "con") return t("debate.outcome.badge.con");
+  if (outcome === "depende") return t("debate.outcome.badge.depende");
+  if (outcome === "inconclusivo") return t("debate.outcome.badge.inconclusivo");
+  return t("debate.outcome.badge.none");
 }
 
-function outcomeMeaning(outcome: ParsedMediatorReport["finalOutcome"]): string {
-  if (outcome === "pro") return "O mediador avaliou que os argumentos do lado Pro foram mais fortes.";
-  if (outcome === "con") return "O mediador avaliou que os argumentos do lado Con foram mais fortes.";
-  if (outcome === "depende") return "O mediador concluiu que a resposta depende de premissas ou contexto adotado.";
-  if (outcome === "inconclusivo") return "O mediador concluiu que não há evidência argumentativa suficiente para decidir.";
-  return "Resultado ainda não definido.";
+function outcomeMeaning(outcome: ParsedMediatorReport["finalOutcome"], t: (key: string) => string): string {
+  if (outcome === "pro") return t("debate.outcome.pro_meaning");
+  if (outcome === "con") return t("debate.outcome.con_meaning");
+  if (outcome === "depende") return t("debate.outcome.depende_meaning");
+  if (outcome === "inconclusivo") return t("debate.outcome.inconclusivo_meaning");
+  return t("debate.outcome.none_meaning");
 }
 
 export default function DebateRunnerPage() {
+  const { t } = useI18n();
   const params = useParams<{ id: string }>();
   const debateId = params.id;
   const [state, setState] = useState<RunnerState>({
@@ -431,12 +443,12 @@ export default function DebateRunnerPage() {
         setState((prev) => ({ ...prev, report }));
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Não foi possível carregar. Tente novamente.");
+      setError(err instanceof Error ? err.message : t("debate.load_error"));
     } finally {
       setReportLoading(false);
       setInitialLoading(false);
     }
-  }, [debateId]);
+  }, [debateId, t]);
 
   useEffect(() => {
     void loadData();
@@ -454,7 +466,7 @@ export default function DebateRunnerPage() {
           con: prev?.con ?? "",
           summary: prev?.summary ?? "",
           report: prev?.report ?? "",
-          phaseLabel: phaseText(ev.data.phase),
+          phaseLabel: phaseText(ev.data.phase, t),
         };
       });
       return;
@@ -468,7 +480,7 @@ export default function DebateRunnerPage() {
         con: prev?.con ?? "",
         summary: prev?.summary ?? "",
         report: prev?.report ?? "",
-        phaseLabel: prev?.phaseLabel ?? "Gerando conteúdo...",
+        phaseLabel: prev?.phaseLabel ?? t("debate.generating_content"),
       }));
       return;
     }
@@ -482,7 +494,7 @@ export default function DebateRunnerPage() {
           con: "",
           summary: "",
           report: "",
-          phaseLabel: "Gerando conteúdo...",
+          phaseLabel: t("debate.generating_content"),
         };
         if (ev.data.target === "debater_a") return { ...draft, pro: `${draft.pro}${ev.data.chunk}` };
         if (ev.data.target === "debater_b") return { ...draft, con: `${draft.con}${ev.data.chunk}` };
@@ -530,7 +542,7 @@ export default function DebateRunnerPage() {
     }
 
     if (ev.event === "error") {
-      setError(ev.data.detail ?? "Falha ao processar stream.");
+      setError(ev.data.detail ?? t("debate.stream_fail"));
       setStreamingDraft(null);
       setStepLoading(false);
     }
@@ -558,7 +570,7 @@ export default function DebateRunnerPage() {
         report: report ?? prev.report,
       }));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Não foi possível avançar o debate.");
+      setError(err instanceof Error ? err.message : t("debate.advance_error"));
     } finally {
       setStepLoading(false);
     }
@@ -594,39 +606,39 @@ export default function DebateRunnerPage() {
         <div className="mb-6 flex flex-col gap-3 sm:mb-7">
           <div>
             <Link href="/debates" className="text-sm text-white/70 underline">
-              Voltar para meus debates
+              {t("debate.back_to_gallery")}
             </Link>
             <h1 className="mt-2 text-xl font-bold text-white sm:text-2xl md:text-3xl">
-              {state.debate?.title ?? "Preparando debate..."}
+              {state.debate?.title ?? t("debate.preparing")}
             </h1>
             <p className="mt-1 text-sm text-white/70">
-              {initialLoading ? "Preparando debate..." : normalizeStatus(status)}
+              {initialLoading ? t("debate.preparing") : normalizeStatus(status, t)}
             </p>
           </div>
         </div>
 
         <div className="mb-5 rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm sm:mb-6 sm:p-5">
           <div className="mb-2 flex items-start justify-between gap-3">
-            <p className="text-xs uppercase tracking-[0.2em] text-matrix-dim">Tese</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-matrix-dim">{t("debate.thesis")}</p>
             {reportLoading ? (
               <div className="h-6 w-28 animate-pulse rounded-full bg-white/10" />
             ) : hasReport ? (
               <button
                 type="button"
                 onClick={() => setIsMediatorModalOpen(true)}
-                title={outcomeMeaning(parsedReport?.finalOutcome ?? null)}
+                title={outcomeMeaning(parsedReport?.finalOutcome ?? null, t)}
                 className="rounded-full border border-matrix-green/70 bg-matrix-green/10 px-3 py-1 text-[11px] font-semibold tracking-[0.08em] text-white transition hover:bg-matrix-green/20"
               >
-                {shortOutcomeLabel(parsedReport?.finalOutcome ?? null)}
+                {shortOutcomeLabel(parsedReport?.finalOutcome ?? null, t)}
               </button>
             ) : (
               <span className="rounded-full border border-white/20 bg-white/[0.03] px-3 py-1 text-[11px] font-semibold tracking-[0.08em] text-white/70">
-                SEM RESULTADO
+                {t("debate.no_result")}
               </span>
             )}
           </div>
           <p className="text-sm leading-relaxed text-white sm:text-base">
-            {state.debate?.question ?? "Carregando pergunta do debate..."}
+            {state.debate?.question ?? t("debate.loading_question")}
           </p>
         </div>
 
@@ -641,10 +653,13 @@ export default function DebateRunnerPage() {
         ) : (
           <section className="space-y-4">
             {slides.length === 0 ? (
-              <div className="rounded-xl border border-white/10 bg-white/5 p-5 text-sm text-white/75 backdrop-blur-sm sm:p-6">
-                Sem rounds ainda. Clique em <strong className="text-matrix-green">Continuar</strong> para
-                iniciar.
-              </div>
+              stepLoading ? null : (
+                <div className="rounded-xl border border-white/10 bg-white/5 p-5 text-sm text-white/75 backdrop-blur-sm sm:p-6">
+                  {t("debate.rounds_empty_prefix")}{" "}
+                  <strong className="text-matrix-green">{t("debate.continue")}</strong>{" "}
+                  {t("debate.rounds_empty_suffix")}
+                </div>
+              )
             ) : (
               <div className="space-y-3">
                 <div className="overflow-hidden" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
@@ -662,9 +677,9 @@ export default function DebateRunnerPage() {
                         style={{ width: `${100 / Math.max(slides.length, 1)}%` }}
                       >
                         {slide.kind === "round" ? (
-                          <RoundCard round={slide.round} summary={slide.summary} />
+                          <RoundCard round={slide.round} summary={slide.summary} t={t} />
                         ) : (
-                          <DraftCard draft={slide.draft} />
+                          <DraftCard draft={slide.draft} t={t} />
                         )}
                       </div>
                     ))}
@@ -678,10 +693,12 @@ export default function DebateRunnerPage() {
                     disabled={activeSlide <= 0}
                     className="rounded-md border border-white/15 px-3 py-1 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    ← Anterior
+                    {t("debate.prev")}
                   </button>
                   <p className="text-xs text-white/70">
-                    Round {activeSlide + 1} de {slides.length}
+                    {t("debate.round_of")
+                      .replace("{current}", String(activeSlide + 1))
+                      .replace("{total}", String(slides.length))}
                   </p>
                   <button
                     type="button"
@@ -689,7 +706,7 @@ export default function DebateRunnerPage() {
                     disabled={activeSlide >= slides.length - 1}
                     className="rounded-md border border-white/15 px-3 py-1 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    Próximo →
+                    {t("debate.next")}
                   </button>
                 </div>
               </div>
@@ -704,14 +721,14 @@ export default function DebateRunnerPage() {
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <p className="text-xs text-white/70 sm:text-sm">
             {stepLoading
-              ? "Executando próximo step em tempo real..."
+              ? t("debate.step_running")
               : finishedByStructure
-                ? "Debate finalizado. Abra o resultado do mediador para revisar a conclusão."
-                : "Continue para avançar o debate."}
+                ? t("debate.finished_hint")
+                : t("debate.continue_hint")}
           </p>
           {finishedByStructure ? (
             <span className="inline-flex w-full items-center justify-center rounded-lg border border-white/20 bg-white/[0.04] px-5 py-3 text-sm font-bold text-white/80 sm:w-auto sm:min-w-44">
-              Debate concluído
+              {t("debate.finished_badge")}
             </span>
           ) : (
             <button
@@ -723,10 +740,10 @@ export default function DebateRunnerPage() {
               {stepLoading ? (
                 <>
                   <span className="inline-block h-3 w-3 rounded-full bg-matrix-green animate-pulse" />
-                  Renderizando step...
+                  {t("debate.rendering_step")}
                 </>
               ) : (
-                "Continuar"
+                t("debate.continue")
               )}
             </button>
           )}
@@ -738,7 +755,7 @@ export default function DebateRunnerPage() {
           className="fixed inset-0 z-30 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4"
           role="dialog"
           aria-modal="true"
-          aria-label="Análise do mediador"
+          aria-label={t("debate.mediator_modal_title")}
           onClick={() => setIsMediatorModalOpen(false)}
         >
           <div
@@ -746,16 +763,16 @@ export default function DebateRunnerPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-bold text-white">Análise do mediador</h2>
+              <h2 className="text-lg font-bold text-white">{t("debate.mediator_modal_title")}</h2>
               <button
                 type="button"
                 onClick={() => setIsMediatorModalOpen(false)}
                 className="rounded-md border border-white/20 px-3 py-1 text-sm text-white/85 transition hover:bg-white/10"
               >
-                Fechar
+                {t("debate.close")}
               </button>
             </div>
-            <MediatorReportView content={state.report?.content_md ?? ""} />
+            <MediatorReportView content={state.report?.content_md ?? ""} t={t} />
           </div>
         </div>
       )}

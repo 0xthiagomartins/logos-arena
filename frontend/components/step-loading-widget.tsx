@@ -1,29 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useI18n } from "@/lib/i18n";
 
 type StepLoadingWidgetProps = {
   roundCount: number;
 };
 
-const ROUND_MESSAGES = [
-  "Convocando estrategistas do lado Pro e Con...",
-  "Pesando premissas e contra-argumentos...",
-  "Refinando lógica, clareza e consistência...",
-  "Mediador auditando possíveis falhas...",
-];
-
-const MEDIATION_MESSAGES = [
-  "Mediador compilando os três rounds...",
-  "Comparando forças e fraquezas finais...",
-  "Gerando veredito explicável em Markdown...",
-  "Quase pronto: estruturando a conclusão...",
-];
-
 export default function StepLoadingWidget({ roundCount }: StepLoadingWidgetProps) {
+  const { t } = useI18n();
   const messages = useMemo(
-    () => (roundCount >= 3 ? MEDIATION_MESSAGES : ROUND_MESSAGES),
-    [roundCount],
+    () =>
+      roundCount >= 3
+        ? [t("loading.mediation.1"), t("loading.mediation.2"), t("loading.mediation.3"), t("loading.mediation.4")]
+        : [t("loading.round.1"), t("loading.round.2"), t("loading.round.3"), t("loading.round.4")],
+    [roundCount, t],
   );
   const [index, setIndex] = useState(0);
 
@@ -60,4 +51,3 @@ export default function StepLoadingWidget({ roundCount }: StepLoadingWidgetProps
     </div>
   );
 }
-
