@@ -20,3 +20,8 @@ export function saveMyDebateId(id: string): void {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(current)));
 }
 
+export function removeMyDebateId(id: string): void {
+  const current = new Set(readMyDebateIds());
+  current.delete(id);
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(current)));
+}

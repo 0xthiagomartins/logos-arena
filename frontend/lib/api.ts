@@ -121,6 +121,10 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(normalizeErrorMessage(payload, `Erro HTTP ${res.status}`));
   }
 
+  if (res.status === 204) {
+    return undefined as T;
+  }
+
   return (await res.json()) as T;
 }
 
@@ -137,6 +141,12 @@ export function createDebate(payload: CreateDebatePayload): Promise<DebateRespon
 
 export function getDebate(debateId: string): Promise<DebateResponse> {
   return apiRequest<DebateResponse>(`/debates/${debateId}`);
+}
+
+export function deleteDebate(debateId: string): Promise<void> {
+  return apiRequest<void>(`/debates/${debateId}`, {
+    method: "DELETE",
+  });
 }
 
 export function getDebateRounds(debateId: string): Promise<DebateRoundsResponse> {

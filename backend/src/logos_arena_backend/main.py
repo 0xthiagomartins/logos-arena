@@ -18,6 +18,7 @@ from logos_arena_backend.schemas.debate import (
 )
 from logos_arena_backend.store import (
     create_debate,
+    delete_debate,
     get_debate,
     get_debate_report,
     get_debate_round_summaries,
@@ -112,6 +113,16 @@ def get_debate_by_id(debate_id: str) -> DebateResponse:
         created_at=record["created_at"],
         updated_at=record["updated_at"],
     )
+
+
+@app.delete("/debates/{debate_id}", status_code=204, tags=["debates"])
+def delete_debate_endpoint(debate_id: str) -> None:
+    deleted = delete_debate(debate_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=404,
+            detail=_error_payload(message="Debate não encontrado.", code="DEBATE_NOT_FOUND"),
+        )
 
 
 @app.post(

@@ -37,6 +37,13 @@ def get_debate(debate_id: str) -> dict[str, Any] | None:
     return _debates.get(debate_id)
 
 
+def delete_debate(debate_id: str) -> bool:
+    if debate_id not in _debates:
+        return False
+    del _debates[debate_id]
+    return True
+
+
 def update_debate_status(debate_id: str, status: str) -> None:
     record = _debates.get(debate_id)
     if record is None:

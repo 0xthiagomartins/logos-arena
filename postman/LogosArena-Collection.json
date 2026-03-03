@@ -1,0 +1,157 @@
+{
+  "info": {
+    "name": "LogosArena API",
+    "description": "Backend LogosArena — health, debates, run, step, step/stream, rounds, report, events, delete.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000" },
+    { "key": "debateId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Debates",
+      "item": [
+        {
+          "name": "POST /debates",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Cristo vegano (ético)?\",\n  \"question\": \"Cristo era vegano em sentido ético?\",\n  \"config\": {\n    \"question\": \"Cristo era vegano em sentido ético?\",\n    \"language\": \"pt-BR\",\n    \"rounds\": [\"opening\", \"rebuttal\", \"closing\"],\n    \"max_tokens_per_message\": 1024,\n    \"debater_profiles\": [],\n    \"mediator_prefs\": {\n      \"explain_like_12yo\": false,\n      \"rigor_formal\": true,\n      \"point_out_fallacies\": true,\n      \"steelman_other_side\": false\n    }\n  }\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/debates", "host": ["{{baseUrl}}"], "path": ["debates"] }
+          }
+        },
+        {
+          "name": "GET /debates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/debates?page=1&per_page=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["debates"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "per_page", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /debates/{debate_id}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/debates/{{debateId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["debates", "{{debateId}}"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /debates/{debate_id}",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/debates/{{debateId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["debates", "{{debateId}}"]
+            }
+          }
+        },
+        {
+          "name": "POST /debates/{debate_id}/run",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/debates/{{debateId}}/run",
+              "host": ["{{baseUrl}}"],
+              "path": ["debates", "{{debateId}}", "run"]
+            }
+          }
+        },
+        {
+          "name": "POST /debates/{debate_id}/step",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/debates/{{debateId}}/step",
+              "host": ["{{baseUrl}}"],
+              "path": ["debates", "{{debateId}}", "step"]
+            }
+          }
+        },
+        {
+          "name": "POST /debates/{debate_id}/step/stream",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/debates/{{debateId}}/step/stream",
+              "host": ["{{baseUrl}}"],
+              "path": ["debates", "{{debateId}}", "step", "stream"]
+            },
+            "description": "SSE: executa o próximo step e emite eventos (round_start, message, round_end, done ou error)."
+          }
+        },
+        {
+          "name": "GET /debates/{debate_id}/rounds",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/debates/{{debateId}}/rounds",
+              "host": ["{{baseUrl}}"],
+              "path": ["debates", "{{debateId}}", "rounds"]
+            }
+          }
+        },
+        {
+          "name": "GET /debates/{debate_id}/report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/debates/{{debateId}}/report",
+              "host": ["{{baseUrl}}"],
+              "path": ["debates", "{{debateId}}", "report"]
+            }
+          }
+        },
+        {
+          "name": "GET /debates/{debate_id}/events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/debates/{{debateId}}/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["debates", "{{debateId}}", "events"]
+            },
+            "description": "Responde 501 (SSE não implementado neste MVP)."
+          }
+        }
+      ]
+    }
+  ]
+}
