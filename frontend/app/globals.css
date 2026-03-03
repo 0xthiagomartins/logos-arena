@@ -228,3 +228,24 @@ details[open] .expander-chevron {
     animation: none;
   }
 }
+
+/* Fallback de contraste para ações de avatar no UserProfile do Clerk. */
+.cl-avatarImageActionsUpload,
+.cl-avatarImageActionsUploadButton {
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.cl-avatarImageActionsUpload:hover,
+.cl-avatarImageActionsUploadButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.cl-avatarImageActionsRemove,
+.cl-avatarImageActionsRemoveButton {
+  border: 1px solid rgba(248, 113, 113, 0.65);
+  background: rgba(127, 29, 29, 0.2);
+  color: #fecaca;
+}

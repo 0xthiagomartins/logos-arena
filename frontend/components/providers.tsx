@@ -36,6 +36,10 @@ function ThemedClerkProvider({ children }: { children: React.ReactNode }) {
           formFieldInputShowPasswordButton: "text-white/70 hover:text-white",
           formButtonPrimary:
             "bg-matrix-green/15 border border-matrix-green text-white hover:bg-matrix-green/25 hover:text-white shadow-[0_0_0_1px_rgba(0,255,65,0.15)]",
+          formButtonReset:
+            "border border-white/25 bg-white/[0.04] text-white/90 hover:bg-white/[0.1] hover:text-white",
+          formButtonSecondary:
+            "border border-white/25 bg-white/[0.04] text-white/90 hover:bg-white/[0.1] hover:text-white",
           footerActionText: "text-white/75",
           footerActionLink: "text-matrix-green hover:text-white underline-offset-2",
           socialButtonsBlockButton:
@@ -61,6 +65,14 @@ function ThemedClerkProvider({ children }: { children: React.ReactNode }) {
           profileSectionTitleText: "text-white",
           profileSectionPrimaryButton:
             "text-matrix-green hover:text-white hover:bg-white/[0.06] rounded-md px-2 py-1",
+          avatarImageActionsUpload:
+            "border border-white/25 bg-white/[0.04] text-white/90 hover:bg-white/[0.1] hover:text-white",
+          avatarImageActionsRemove:
+            "border border-red-400/60 bg-red-900/20 text-red-200 hover:bg-red-900/35",
+          avatarImageActionsUploadButton:
+            "border border-white/25 bg-white/[0.04] text-white/90 hover:bg-white/[0.1] hover:text-white",
+          avatarImageActionsRemoveButton:
+            "border border-red-400/60 bg-red-900/20 text-red-200 hover:bg-red-900/35",
           userButtonPopoverCard:
             "rounded-2xl border border-white/15 bg-gradient-to-b from-white/[0.07] to-white/[0.03] shadow-2xl shadow-black/80 backdrop-blur-sm",
           userButtonPopoverMainIdentifier: "!text-white",
