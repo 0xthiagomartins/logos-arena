@@ -20,6 +20,12 @@ const DICTIONARY: Record<AppLanguage, Record<string, string>> = {
     "nav.login": "Logar",
     "nav.signup": "Cadastrar",
     "nav.auth_disabled": "Auth será habilitado com Clerk",
+    "auth.required_title": "Login necessário",
+    "auth.required_description":
+      "Você já usou seu teste grátis anônimo. Faça login ou cadastre-se para criar novos debates.",
+    "auth.sign_in": "Entrar",
+    "auth.sign_up": "Criar conta",
+    "auth.cancel": "Cancelar",
     "home.title": "LogosArena",
     "home.subtitle":
       "Debates estruturados com IA, rounds rastreáveis e mediação explicável em um fluxo claro: criar, acompanhar, concluir.",
@@ -126,6 +132,12 @@ const DICTIONARY: Record<AppLanguage, Record<string, string>> = {
     "nav.login": "Log in",
     "nav.signup": "Sign up",
     "nav.auth_disabled": "Auth will be enabled with Clerk",
+    "auth.required_title": "Login required",
+    "auth.required_description":
+      "You already used your anonymous free trial. Sign in or sign up to create more debates.",
+    "auth.sign_in": "Sign in",
+    "auth.sign_up": "Create account",
+    "auth.cancel": "Cancel",
     "home.title": "LogosArena",
     "home.subtitle":
       "Structured AI debates with traceable rounds and explainable mediation in a clear flow: create, follow, conclude.",

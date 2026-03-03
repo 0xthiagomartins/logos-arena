@@ -1,6 +1,7 @@
 "use client";
 
 const STORAGE_KEY = "logosarena:my_debate_ids";
+const ANON_TRIAL_USED_KEY = "logosarena:anon_trial_used";
 
 export function readMyDebateIds(): string[] {
   try {
@@ -24,4 +25,12 @@ export function removeMyDebateId(id: string): void {
   const current = new Set(readMyDebateIds());
   current.delete(id);
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(current)));
+}
+
+export function hasAnonymousTrialUsed(): boolean {
+  return window.localStorage.getItem(ANON_TRIAL_USED_KEY) === "1";
+}
+
+export function markAnonymousTrialUsed(): void {
+  window.localStorage.setItem(ANON_TRIAL_USED_KEY, "1");
 }

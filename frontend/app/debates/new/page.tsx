@@ -1,10 +1,12 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
+import RequireAuthModal from "@/components/require-auth-modal";
 import { createDebate } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { saveMyDebateId } from "@/lib/local-gallery";
+import { hasAnonymousTrialUsed, markAnonymousTrialUsed, saveMyDebateId } from "@/lib/local-gallery";
 
 type ToggleCardProps = {
   id: string;
@@ -56,6 +58,7 @@ function ToggleCard({ id, title, description, checked, disabled, onChange }: Tog
 
 export default function NewDebatePage() {
   const { t } = useI18n();
+  const { isLoaded, isSignedIn, getToken } = useAuth();
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [question, setQuestion] = useState("");
@@ -65,9 +68,29 @@ export default function NewDebatePage() {
   const [titleError, setTitleError] = useState<string | null>(null);
   const [questionError, setQuestionError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (!isSignedIn && hasAnonymousTrialUsed()) {
+      setShowAuthModal(true);
+    }
+  }, [isLoaded, isSignedIn]);
+
+  useEffect(() => {
+    if (isSignedIn) {
+      setShowAuthModal(false);
+    }
+  }, [isSignedIn]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!isLoaded) return;
+    if (!isSignedIn && hasAnonymousTrialUsed()) {
+      setShowAuthModal(true);
+      return;
+    }
+
     const nextTitle = title.trim();
     const nextQuestion = question.trim();
 
@@ -83,6 +106,7 @@ export default function NewDebatePage() {
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const token = isSignedIn ? await getToken() : null;
       const created = await createDebate({
         title: nextTitle,
         question: nextQuestion,
@@ -93,8 +117,11 @@ export default function NewDebatePage() {
             rigor_formal: rigorMode,
           },
         },
-      });
+      }, { token });
       saveMyDebateId(created.id);
+      if (!isSignedIn) {
+        markAnonymousTrialUsed();
+      }
       router.push(`/debates/${created.id}`);
     } catch (err: unknown) {
       setSubmitError(err instanceof Error ? err.message : t("new.validation.submit_error"));
@@ -207,6 +234,7 @@ export default function NewDebatePage() {
           </div>
         </form>
       </section>
+      <RequireAuthModal open={showAuthModal} mandatory />
     </main>
   );
 }

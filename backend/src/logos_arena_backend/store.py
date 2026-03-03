@@ -10,17 +10,27 @@ def _now_iso() -> str:
 
 
 _debates: dict[str, dict[str, Any]] = {}
+_anonymous_trial_used_clients: set[str] = set()
 
 
-def create_debate(req: CreateDebateRequest) -> dict[str, Any]:
+def create_debate(
+    req: CreateDebateRequest,
+    *,
+    owner_user_id: str | None = None,
+    owner_client_id: str | None = None,
+) -> dict[str, Any]:
     config = req.resolve_config()
     debate_id = str(uuid.uuid4())
     now = _now_iso()
+    if owner_user_id is None and owner_client_id:
+        _anonymous_trial_used_clients.add(owner_client_id)
     record = {
         "id": debate_id,
         "title": req.title,
         "question": req.question,
         "status": "draft",
+        "owner_user_id": owner_user_id,
+        "owner_client_id": owner_client_id,
         "config_json": config.model_dump(),
         "current_round_index": 0,
         "created_at": now,
@@ -35,6 +45,10 @@ def create_debate(req: CreateDebateRequest) -> dict[str, Any]:
 
 def get_debate(debate_id: str) -> dict[str, Any] | None:
     return _debates.get(debate_id)
+
+
+def has_used_anonymous_trial(client_id: str) -> bool:
+    return client_id in _anonymous_trial_used_clients
 
 
 def delete_debate(debate_id: str) -> bool:

@@ -16,6 +16,7 @@ dependencies = [
   "fastapi>=0.115.0",
   "uvicorn[standard]>=0.30.0",
   "litellm>=1.0.0",
+  "pyjwt[crypto]>=2.10.0",
 ]
 
 [project.optional-dependencies]
@@ -26,4 +27,3 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/logos_arena_backend"]
-

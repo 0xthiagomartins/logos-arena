@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import NewDebateLink from "@/components/new-debate-link";
 import { deleteDebate, listDebates, type DebateListItem } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { readMyDebateIds, removeMyDebateId } from "@/lib/local-gallery";
@@ -120,12 +121,9 @@ export default function DebatesPage() {
             {loading ? t("gallery.subtitle_loading") : t("gallery.subtitle_ready")}
           </p>
         </div>
-        <Link
-          href="/debates/new"
-          className="rounded-lg border border-white/15 bg-white/[0.04] px-4 py-2 text-sm font-bold text-white/85 transition hover:bg-white/[0.08]"
-        >
+        <NewDebateLink className="rounded-lg border border-white/15 bg-white/[0.04] px-4 py-2 text-sm font-bold text-white/85 transition hover:bg-white/[0.08]">
           {t("gallery.new_debate")}
-        </Link>
+        </NewDebateLink>
       </div>
 
       {error && (

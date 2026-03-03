@@ -29,7 +29,7 @@ LogosArena turns polarising questions into **structured debates**: Pro vs Con, m
 ```bash
 cd backend
 uv sync
-cp .env.example .env   # set OPENAI_API_KEY
+cp .env.example .env   # set OPENAI_API_KEY + Clerk vars
 uv run uvicorn logos_arena_backend.main:app --reload
 ```
 
@@ -39,12 +39,19 @@ API: `http://localhost:8000` — see [context/specs/03-api-persistence.md](conte
 
 ```bash
 cd frontend
-cp .env.example .env   # NEXT_PUBLIC_API_URL=http://localhost:8000
+cp .env.example .env   # NEXT_PUBLIC_API_URL + NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
 npm install
 npm run dev
 ```
 
 App: `http://localhost:3000`.
+
+### Auth + anonymous trial rule (MVP)
+
+- Anonymous users can create only **1 debate per client/device**.
+- After the first anonymous debate, creating a new debate requires login/signup via Clerk.
+- Backend enforces the same rule using `X-Client-Id` + Clerk token validation.
+- Backend env for Clerk: `CLERK_ISSUER` (or `CLERK_JWKS_URL`).
 
 ---
 

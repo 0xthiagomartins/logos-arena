@@ -1,9 +1,10 @@
 import json
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
+from logos_arena_backend.auth import AuthValidationError, get_clerk_user_id
 from logos_arena_backend.schemas.debate import (
     CreateDebateRequest,
     DebateListItem,
@@ -23,6 +24,7 @@ from logos_arena_backend.store import (
     get_debate_report,
     get_debate_round_summaries,
     get_debate_rounds,
+    has_used_anonymous_trial,
     list_debates,
 )
 from logos_arena_backend.orchestrator import (
@@ -53,8 +55,39 @@ def health() -> dict[str, str]:
 
 
 @app.post("/debates", response_model=DebateResponse, status_code=201, tags=["debates"])
-def post_debates(body: CreateDebateRequest) -> DebateResponse:
-    record = create_debate(body)
+def post_debates(body: CreateDebateRequest, request: Request) -> DebateResponse:
+    try:
+        user_id = get_clerk_user_id(request.headers.get("Authorization"))
+    except AuthValidationError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=_error_payload(message=exc.message, code=exc.code),
+        ) from exc
+
+    client_id = request.headers.get("X-Client-Id", "").strip()
+    if user_id is None:
+        if not client_id:
+            raise HTTPException(
+                status_code=400,
+                detail=_error_payload(
+                    message="Header X-Client-Id é obrigatório para uso anônimo.",
+                    code="ANON_CLIENT_ID_REQUIRED",
+                ),
+            )
+        if has_used_anonymous_trial(client_id):
+            raise HTTPException(
+                status_code=401,
+                detail=_error_payload(
+                    message="Seu teste grátis já foi usado. Faça login para criar novos debates.",
+                    code="AUTH_REQUIRED_AFTER_TRIAL",
+                ),
+            )
+
+    record = create_debate(
+        body,
+        owner_user_id=user_id,
+        owner_client_id=client_id if user_id is None else None,
+    )
     return DebateResponse(
         id=record["id"],
         status=record["status"],

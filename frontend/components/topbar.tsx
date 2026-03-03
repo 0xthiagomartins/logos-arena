@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { SignInButton, SignUpButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { useI18n, type AppLanguage } from "@/lib/i18n";
 
 export default function Topbar() {
@@ -76,7 +77,7 @@ export default function Topbar() {
             {languageMenuOpen && (
               <div
                 role="menu"
-                className="absolute right-0 z-50 mt-1.5 w-[105  px] rounded-md border border-white/15 bg-matrix-black/95 p-1 shadow-lg shadow-black/50"
+                className="absolute right-0 z-50 mt-1.5 w-[105px] rounded-md border border-white/15 bg-matrix-black/95 p-1 shadow-lg shadow-black/50"
               >
                 <button
                   type="button"
@@ -106,22 +107,36 @@ export default function Topbar() {
             )}
           </div>
 
-          <button
-            type="button"
-            disabled
-            title={t("nav.auth_disabled")}
-            className="w-[96px] cursor-not-allowed rounded-md border border-white/15 bg-white/[0.03] px-3 py-1.5 text-center text-sm text-white/60 opacity-70"
-          >
-            {t("nav.login")}
-          </button>
-          <button
-            type="button"
-            disabled
-            title={t("nav.auth_disabled")}
-            className="w-[96px] cursor-not-allowed rounded-md border border-white/15 bg-white/[0.03] px-3 py-1.5 text-center text-sm text-white/60 opacity-70"
-          >
-            {t("nav.signup")}
-          </button>
+          <SignedOut>
+            <SignInButton mode="modal">
+              <button
+                type="button"
+                className="w-[96px] rounded-md border border-white/15 bg-white/[0.03] px-3 py-1.5 text-center text-sm text-white/85 transition hover:bg-white/[0.08]"
+              >
+                {t("nav.login")}
+              </button>
+            </SignInButton>
+            <SignUpButton mode="modal">
+              <button
+                type="button"
+                className="w-[96px] rounded-md border border-matrix-green/60 bg-matrix-green/10 px-3 py-1.5 text-center text-sm text-white transition hover:bg-matrix-green/20"
+              >
+                {t("nav.signup")}
+              </button>
+            </SignUpButton>
+          </SignedOut>
+          <SignedIn>
+            <div className="rounded-md border border-white/15 bg-white/[0.03] px-1.5 py-1">
+              <UserButton
+                afterSignOutUrl="/"
+                appearance={{
+                  elements: {
+                    userButtonAvatarBox: "h-7 w-7",
+                  },
+                }}
+              />
+            </div>
+          </SignedIn>
         </div>
       </div>
     </header>

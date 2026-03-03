@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import NewDebateLink from "@/components/new-debate-link";
 import { useI18n } from "@/lib/i18n";
 
 export default function Home() {
@@ -16,12 +17,9 @@ export default function Home() {
         </p>
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-          <Link
-            href="/debates/new"
-            className="rounded-lg border border-matrix-green bg-matrix-green/15 px-5 py-3 text-center text-sm font-bold text-white transition hover:bg-matrix-green/25"
-          >
+          <NewDebateLink className="rounded-lg border border-matrix-green bg-matrix-green/15 px-5 py-3 text-center text-sm font-bold text-white transition hover:bg-matrix-green/25">
             {t("home.new_debate")}
-          </Link>
+          </NewDebateLink>
           <Link
             href="/debates"
             className="rounded-lg border border-white/15 bg-white/[0.04] px-5 py-3 text-center text-sm font-bold text-white/85 transition hover:bg-white/[0.08]"

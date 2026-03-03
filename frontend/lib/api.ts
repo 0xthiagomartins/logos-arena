@@ -1,3 +1,5 @@
+import { getOrCreateAnonymousClientId } from "@/lib/client-id";
+
 export type DebateStatus = "draft" | "queued" | "running" | "paused" | "completed" | "failed";
 
 export type DebateListItem = {
@@ -87,6 +89,11 @@ type CreateDebatePayload = {
   };
 };
 
+type ApiRequestOptions = {
+  token?: string | null;
+  clientId?: string | null;
+};
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 function normalizeErrorMessage(payload: unknown, fallback: string): string {
@@ -101,13 +108,26 @@ function normalizeErrorMessage(payload: unknown, fallback: string): string {
   return fallback;
 }
 
-async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
+function buildApiHeaders(initHeaders?: HeadersInit, options?: ApiRequestOptions): Headers {
+  const headers = new Headers(initHeaders);
+  headers.set("Content-Type", "application/json");
+
+  const clientId =
+    options?.clientId ?? (typeof window !== "undefined" ? getOrCreateAnonymousClientId() : null);
+  if (clientId) {
+    headers.set("X-Client-Id", clientId);
+  }
+
+  if (options?.token) {
+    headers.set("Authorization", `Bearer ${options.token}`);
+  }
+  return headers;
+}
+
+async function apiRequest<T>(path: string, init?: RequestInit, options?: ApiRequestOptions): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    headers: buildApiHeaders(init?.headers, options),
     cache: "no-store",
   });
 
@@ -132,11 +152,11 @@ export function listDebates(page = 1, perPage = 20): Promise<DebateListResponse>
   return apiRequest<DebateListResponse>(`/debates?page=${page}&per_page=${perPage}`);
 }
 
-export function createDebate(payload: CreateDebatePayload): Promise<DebateResponse> {
+export function createDebate(payload: CreateDebatePayload, options?: ApiRequestOptions): Promise<DebateResponse> {
   return apiRequest<DebateResponse>("/debates", {
     method: "POST",
     body: JSON.stringify(payload),
-  });
+  }, options);
 }
 
 export function getDebate(debateId: string): Promise<DebateResponse> {
@@ -170,7 +190,7 @@ export async function runDebateStepStream(
 ): Promise<void> {
   const response = await fetch(`${API_BASE}/debates/${debateId}/step/stream`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: buildApiHeaders(),
     body: JSON.stringify({}),
     cache: "no-store",
   });
