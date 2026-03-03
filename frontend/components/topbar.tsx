@@ -126,12 +126,14 @@ export default function Topbar() {
             </SignUpButton>
           </SignedOut>
           <SignedIn>
-            <div className="rounded-md border border-white/15 bg-white/[0.03] px-1.5 py-1">
+            <div className="flex items-center justify-center">
               <UserButton
                 afterSignOutUrl="/"
                 appearance={{
                   elements: {
-                    userButtonAvatarBox: "h-7 w-7",
+                    userButtonAvatarBox: "h-8 w-8",
+                    userButtonTrigger:
+                      "rounded-full p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-matrix-green/70",
                   },
                 }}
               />

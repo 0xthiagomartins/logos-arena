@@ -1,5 +1,3 @@
-"use client";
-
 const CLIENT_ID_KEY = "logosarena:anon_client_id";
 
 function fallbackId(): string {

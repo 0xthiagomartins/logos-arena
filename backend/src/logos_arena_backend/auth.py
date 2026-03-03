@@ -76,6 +76,8 @@ def get_clerk_user_id(authorization_header: str | None) -> str | None:
         jwk_client = _get_jwk_client(jwks_url)
         signing_key = jwk_client.get_signing_key_from_jwt(token)
         issuer = os.getenv("CLERK_ISSUER")
+        if issuer:
+            issuer = issuer.rstrip("/")
         decode_options = {
             "verify_aud": False,
             "verify_iss": bool(issuer),
