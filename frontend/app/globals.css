@@ -3,14 +3,68 @@
 @tailwind utilities;
 
 :root {
-  --bg: #0a0a0a;
+  --bg: #060606;
   --fg: #00ff41;
   --fg-dim: #00cc34;
   --muted: #003b00;
 }
 
 body {
-  @apply bg-matrix-black text-white font-mono antialiased;
+  position: relative;
+  background-color: #050505;
+  @apply text-white font-mono antialiased;
+}
+
+body::before,
+body::after {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+}
+
+body::before {
+  background:
+    radial-gradient(900px circle at 12% -8%, rgba(0, 255, 65, 0.05), transparent 65%),
+    radial-gradient(800px circle at 88% 2%, rgba(0, 204, 52, 0.04), transparent 62%);
+}
+
+body::after {
+  opacity: 0.17;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.018) 0px,
+      rgba(255, 255, 255, 0.018) 1px,
+      transparent 1px,
+      transparent 4px
+    ),
+    linear-gradient(120deg, transparent 0%, rgba(0, 255, 65, 0.035) 45%, transparent 100%);
+  animation: matrix-shift 18s linear infinite;
+}
+
+.matrix-bits {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.matrix-stream {
+  position: absolute;
+  left: var(--stream-x);
+  top: var(--stream-y);
+  font-size: 8px;
+  line-height: 1.15;
+  letter-spacing: 0.05em;
+  white-space: pre;
+  color: rgba(0, 255, 65, 0.32);
+  text-shadow: 0 0 5px rgba(0, 255, 65, 0.2);
+  opacity: 0;
+  animation: matrix-stream-fall var(--stream-duration) linear infinite;
+  animation-delay: var(--stream-delay);
 }
 
 .markdown-content h1,
@@ -96,5 +150,47 @@ details[open] .expander-chevron {
   100% {
     opacity: 0.2;
     transform: translateY(-3px);
+  }
+}
+
+@keyframes matrix-shift {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, 10px, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes matrix-stream-fall {
+  0% {
+    transform: translateY(-2vh);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.34;
+  }
+  35% {
+    opacity: 0.16;
+  }
+  58% {
+    opacity: 0.08;
+  }
+  100% {
+    transform: translateY(22vh);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::after {
+    animation: none;
+  }
+
+  .matrix-stream {
+    animation: none;
   }
 }
