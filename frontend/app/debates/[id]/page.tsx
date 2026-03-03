@@ -688,58 +688,63 @@ export default function DebateRunnerPage() {
               </div>
             )}
 
-            {stepLoading && <StepLoadingWidget roundCount={state.rounds.length} />}
           </section>
         )}
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-matrix-black/85 p-3 backdrop-blur-md sm:p-4">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-center gap-2 sm:justify-end sm:gap-3">
-          <button
-            type="button"
-            onClick={goPrevSlide}
-            disabled={slides.length === 0 || activeSlide <= 0}
-            aria-label={t("debate.prev")}
-            className="rounded-md border border-white/15 px-3 py-1.5 text-xl leading-none text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            ←
-          </button>
-          <span className="rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/75 sm:text-sm">
-            {t("debate.round_of")
-              .replace("{current}", String(slides.length === 0 ? 0 : activeSlide + 1))
-              .replace("{total}", String(slides.length))}
-          </span>
-          <button
-            type="button"
-            onClick={goNextSlide}
-            disabled={slides.length === 0 || activeSlide >= slides.length - 1}
-            aria-label={t("debate.next")}
-            className="rounded-md border border-white/15 px-3 py-1.5 text-xl leading-none text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            →
-          </button>
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-matrix-black/85 p-3 backdrop-blur-md">
+        <div className="mx-auto flex w-full max-w-6xl items-stretch gap-2">
+          <div className="min-h-[42px] flex-1">
+            {stepLoading ? <StepLoadingWidget roundCount={state.rounds.length} compact /> : null}
+          </div>
 
-          {finishedByStructure ? (
-            <span className="inline-flex items-center justify-center rounded-lg border border-white/20 bg-white/[0.04] px-5 py-2 text-sm font-bold text-white/80 sm:min-w-44">
-              {t("debate.finished_badge")}
-            </span>
-          ) : (
+          <div className="flex shrink-0 items-center justify-end gap-2 sm:gap-3">
             <button
               type="button"
-              onClick={onContinue}
-              disabled={!canContinue}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-matrix-green bg-matrix-green/15 px-5 py-2 text-sm font-bold text-white transition hover:bg-matrix-green/25 disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-44"
+              onClick={goPrevSlide}
+              disabled={slides.length === 0 || activeSlide <= 0}
+              aria-label={t("debate.prev")}
+              className="rounded-md border border-white/15 px-3 py-1.5 text-xl leading-none text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {stepLoading ? (
-                <>
-                  <span className="inline-block h-3 w-3 rounded-full bg-matrix-green animate-pulse" />
-                  {t("debate.rendering_step")}
-                </>
-              ) : (
-                t("debate.continue")
-              )}
+              ←
             </button>
-          )}
+            <span className="rounded-md border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/75 sm:text-sm">
+              {t("debate.round_of")
+                .replace("{current}", String(slides.length === 0 ? 0 : activeSlide + 1))
+                .replace("{total}", String(slides.length))}
+            </span>
+            <button
+              type="button"
+              onClick={goNextSlide}
+              disabled={slides.length === 0 || activeSlide >= slides.length - 1}
+              aria-label={t("debate.next")}
+              className="rounded-md border border-white/15 px-3 py-1.5 text-xl leading-none text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              →
+            </button>
+
+            {finishedByStructure ? (
+              <span className="inline-flex items-center justify-center rounded-lg border border-white/20 bg-white/[0.04] px-5 py-2 text-sm font-bold text-white/80 sm:min-w-44">
+                {t("debate.finished_badge")}
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={onContinue}
+                disabled={!canContinue}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-matrix-green bg-matrix-green/15 px-5 py-2 text-sm font-bold text-white transition hover:bg-matrix-green/25 disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-44"
+              >
+                {stepLoading ? (
+                  <>
+                    <span className="inline-block h-3 w-3 rounded-full bg-matrix-green animate-pulse" />
+                    {t("debate.rendering_step")}
+                  </>
+                ) : (
+                  t("debate.continue")
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
