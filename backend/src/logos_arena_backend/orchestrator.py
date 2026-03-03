@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 from typing import Any, Iterator, Literal
 
 from logos_arena_backend.llm_provider import generate as llm_generate
@@ -235,7 +236,7 @@ def _generate_step_summary(question: str, round_data: dict[str, Any]) -> str:
     return _extract_content(response)
 
 
-def _chunk_text(text: str, chunk_size: int = 28) -> list[str]:
+def _chunk_text(text: str, chunk_size: int = 6) -> list[str]:
     words = text.split()
     if not words:
         return [""]
@@ -245,6 +246,12 @@ def _chunk_text(text: str, chunk_size: int = 28) -> list[str]:
         if piece:
             chunks.append(f"{piece} ")
     return chunks
+
+
+def _iter_typed_chunks(text: str, chunk_size: int = 6, delay_seconds: float = 0.035) -> Iterator[str]:
+    for chunk in _chunk_text(text, chunk_size=chunk_size):
+        yield chunk
+        time.sleep(delay_seconds)
 
 
 def _rounds_as_text(rounds: list[dict[str, Any]]) -> str:
@@ -407,7 +414,7 @@ def run_next_step_stream(debate_id: str) -> Iterator[dict[str, Any]]:
                 "event": "message_start",
                 "data": {"target": "debater_a", "round_index": round_index, "round_type": round_type},
             }
-            for chunk in _chunk_text(pro_text):
+            for chunk in _iter_typed_chunks(pro_text, chunk_size=4, delay_seconds=0.04):
                 yield {"event": "message_chunk", "data": {"target": "debater_a", "chunk": chunk}}
             yield {"event": "message_end", "data": {"target": "debater_a"}}
 
@@ -415,14 +422,14 @@ def run_next_step_stream(debate_id: str) -> Iterator[dict[str, Any]]:
                 "event": "message_start",
                 "data": {"target": "debater_b", "round_index": round_index, "round_type": round_type},
             }
-            for chunk in _chunk_text(con_text):
+            for chunk in _iter_typed_chunks(con_text, chunk_size=4, delay_seconds=0.04):
                 yield {"event": "message_chunk", "data": {"target": "debater_b", "chunk": chunk}}
             yield {"event": "message_end", "data": {"target": "debater_b"}}
 
             yield {"event": "phase", "data": {"phase": "summary_start", "round_index": round_index}}
             step_summary = _generate_step_summary(question=question, round_data=round_data)
             yield {"event": "message_start", "data": {"target": "step_summary", "round_index": round_index}}
-            for chunk in _chunk_text(step_summary, chunk_size=24):
+            for chunk in _iter_typed_chunks(step_summary, chunk_size=5, delay_seconds=0.035):
                 yield {"event": "message_chunk", "data": {"target": "step_summary", "chunk": chunk}}
             yield {"event": "message_end", "data": {"target": "step_summary"}}
 
@@ -455,7 +462,7 @@ def run_next_step_stream(debate_id: str) -> Iterator[dict[str, Any]]:
             mediator_system_prompt=mediator_system_prompt,
         )
         yield {"event": "message_start", "data": {"target": "report"}}
-        for chunk in _chunk_text(report_content, chunk_size=32):
+        for chunk in _iter_typed_chunks(report_content, chunk_size=7, delay_seconds=0.03):
             yield {"event": "message_chunk", "data": {"target": "report", "chunk": chunk}}
         yield {"event": "message_end", "data": {"target": "report"}}
 

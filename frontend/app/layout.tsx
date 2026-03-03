@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono } from "next/font/google";
+import Providers from "@/components/providers";
+import Topbar from "@/components/topbar";
 import "./globals.css";
 
 const jetbrainsMono = JetBrains_Mono({
@@ -21,7 +23,10 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className={jetbrainsMono.variable}>
       <body className="min-h-screen bg-matrix-black text-matrix-green font-mono">
-        {children}
+        <Providers>
+          <Topbar />
+          {children}
+        </Providers>
       </body>
     </html>
   );

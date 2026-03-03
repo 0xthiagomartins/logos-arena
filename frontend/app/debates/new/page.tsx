@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createDebate } from "@/lib/api";
+import { saveMyDebateId } from "@/lib/local-gallery";
 
 type ToggleCardProps = {
   id: string;
@@ -84,6 +85,7 @@ export default function NewDebatePage() {
           },
         },
       });
+      saveMyDebateId(created.id);
       router.push(`/debates/${created.id}`);
     } catch (err: unknown) {
       setSubmitError(err instanceof Error ? err.message : "Erro ao criar. Tente de novo.");

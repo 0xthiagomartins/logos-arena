@@ -253,7 +253,10 @@ function firstParagraph(text: string): string {
 }
 
 function removeFinalOutcomeLine(text: string): string {
-  return text.replace(/^\s*final_outcome:\s*(pro|con|inconclusivo|depende)\s*$/gim, "").trim();
+  return text
+    .replace(/^\s*[-*]?\s*`?\s*final_outcome:\s*(pro|con|inconclusivo|depende)\s*`?\s*$/gim, "")
+    .replace(/`?\s*final_outcome:\s*(pro|con|inconclusivo|depende)\s*`?/gim, "")
+    .trim();
 }
 
 function MediatorReportView({ content }: { content: string }) {
@@ -263,12 +266,14 @@ function MediatorReportView({ content }: { content: string }) {
     return <MarkdownContent content={content} />;
   }
 
+  const cleanConclusion = removeFinalOutcomeLine(parsed.conclusion);
+
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-matrix-green/50 bg-matrix-muted/25 p-4">
         <p className="text-xs uppercase tracking-[0.18em] text-matrix-dim">{outcomeLabel(parsed.finalOutcome)}</p>
-        {parsed.conclusion && (
-          <p className="mt-2 text-sm leading-relaxed text-white/90">{firstParagraph(parsed.conclusion)}</p>
+        {cleanConclusion && (
+          <p className="mt-2 text-sm leading-relaxed text-white/90">{firstParagraph(cleanConclusion)}</p>
         )}
       </div>
 
@@ -293,7 +298,7 @@ function MediatorReportView({ content }: { content: string }) {
         <div className="mt-3">
           <MarkdownContent
             content={
-              removeFinalOutcomeLine([parsed.analysis, parsed.conclusion].filter(Boolean).join("\n\n")) ||
+              removeFinalOutcomeLine([parsed.analysis, cleanConclusion].filter(Boolean).join("\n\n")) ||
               "_Sem conteúdo._"
             }
           />
@@ -343,6 +348,8 @@ export default function DebateRunnerPage() {
     [hasReport, state.report?.content_md],
   );
   const status = state.debate?.status ?? "draft";
+  const debateFinished = status === "completed" || status === "failed";
+  const finishedByStructure = state.rounds.length >= 3 && (hasReport || debateFinished);
   const hasDraftRenderableContent = Boolean(
     streamingDraft &&
       (streamingDraft.pro.trim() ||
@@ -355,8 +362,9 @@ export default function DebateRunnerPage() {
     if (!state.debate) return false;
     if (stepLoading) return false;
     if (status === "failed" || status === "completed") return false;
+    if (finishedByStructure) return false;
     return !hasReport;
-  }, [hasReport, state.debate, status, stepLoading]);
+  }, [finishedByStructure, hasReport, state.debate, status, stepLoading]);
 
   const slides: CarouselSlide[] = useMemo(() => {
     const roundSlides: CarouselSlide[] = state.rounds.map((round, idx) => ({
@@ -535,6 +543,20 @@ export default function DebateRunnerPage() {
     setStreamingDraft(null);
     try {
       await runDebateStepStream(debateId, applyStreamEvent);
+      // Hard sync after each step to avoid stale local status/report state.
+      const debate = await getDebate(debateId);
+      const roundsPayload = await getDebateRounds(debateId);
+      let report: ReportResponse | null = null;
+      if (debate.status === "completed" || debate.current_round_index >= 3) {
+        report = await getDebateReport(debateId);
+      }
+      setState((prev) => ({
+        ...prev,
+        debate,
+        rounds: roundsPayload.rounds,
+        roundSummaries: roundsPayload.round_summaries,
+        report: report ?? prev.report,
+      }));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Não foi possível avançar o debate.");
     } finally {
@@ -681,23 +703,33 @@ export default function DebateRunnerPage() {
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-matrix-black/85 p-3 backdrop-blur-md sm:p-4">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <p className="text-xs text-white/70 sm:text-sm">
-            {stepLoading ? "Executando próximo step em tempo real..." : "Continue para avançar o debate."}
+            {stepLoading
+              ? "Executando próximo step em tempo real..."
+              : finishedByStructure
+                ? "Debate finalizado. Abra o resultado do mediador para revisar a conclusão."
+                : "Continue para avançar o debate."}
           </p>
-          <button
-            type="button"
-            onClick={onContinue}
-            disabled={!canContinue}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-matrix-green bg-matrix-green/15 px-5 py-3 text-sm font-bold text-white transition hover:bg-matrix-green/25 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-44"
-          >
-            {stepLoading ? (
-              <>
-                <span className="inline-block h-3 w-3 rounded-full bg-matrix-green animate-pulse" />
-                Renderizando step...
-              </>
-            ) : (
-              "Continuar"
-            )}
-          </button>
+          {finishedByStructure ? (
+            <span className="inline-flex w-full items-center justify-center rounded-lg border border-white/20 bg-white/[0.04] px-5 py-3 text-sm font-bold text-white/80 sm:w-auto sm:min-w-44">
+              Debate concluído
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={onContinue}
+              disabled={!canContinue}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-matrix-green bg-matrix-green/15 px-5 py-3 text-sm font-bold text-white transition hover:bg-matrix-green/25 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-44"
+            >
+              {stepLoading ? (
+                <>
+                  <span className="inline-block h-3 w-3 rounded-full bg-matrix-green animate-pulse" />
+                  Renderizando step...
+                </>
+              ) : (
+                "Continuar"
+              )}
+            </button>
+          )}
         </div>
       </div>
 
