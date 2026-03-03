@@ -10,10 +10,6 @@
 
 LogosArena turns polarising questions into **structured debates**: Pro vs Con, multiple rounds (opening → rebuttal → closing), and a **mediator** that summarises and scores the arguments. You get a final report instead of a single opaque answer.
 
-- **Step-by-step flow**: Run one round at a time, read a short **quality summary** per round, then click *Continuar* to generate the next.
-- **Run full debate**: Or execute all rounds + mediation in one go.
-- **Cypherpunk-style UI**: JetBrains Mono, green-on-black theme (Next.js + Tailwind).
-
 ---
 
 ## Tech stack
