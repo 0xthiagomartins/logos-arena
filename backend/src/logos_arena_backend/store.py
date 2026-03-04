@@ -1,16 +1,52 @@
+from __future__ import annotations
+
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+from sqlmodel import Session, select
+
+from logos_arena_backend.db import engine
+from logos_arena_backend.models import Debate, Report, Round
 from logos_arena_backend.schemas.debate import CreateDebateRequest
 
 
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+def _now_iso(dt: datetime | None = None) -> str:
+    value = dt or datetime.now(timezone.utc)
+    return value.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-_debates: dict[str, dict[str, Any]] = {}
-_anonymous_trial_used_clients: set[str] = set()
+def _debate_to_record(
+    debate: Debate,
+    *,
+    rounds: list[Round] | None = None,
+    report: Report | None = None,
+) -> dict[str, Any]:
+    rounds = rounds or []
+    return {
+        "id": debate.id,
+        "title": debate.title,
+        "question": debate.question,
+        "status": debate.status,
+        "owner_user_id": debate.owner_user_id,
+        "owner_client_id": debate.owner_client_id,
+        "config_json": debate.config_json or {},
+        "current_round_index": debate.current_round_index,
+        "created_at": _now_iso(debate.created_at),
+        "updated_at": _now_iso(debate.updated_at),
+        "rounds": [
+            {
+                "index": r.index,
+                "type": r.type,
+                "messages": r.messages or [],
+            }
+            for r in sorted(rounds, key=lambda x: x.index)
+        ],
+        "round_summaries": [
+            r.step_summary or "" for r in sorted(rounds, key=lambda x: x.index)
+        ],
+        "report": {"content_md": report.content_md} if report else {},
+    }
 
 
 def create_debate(
@@ -21,49 +57,81 @@ def create_debate(
 ) -> dict[str, Any]:
     config = req.resolve_config()
     debate_id = str(uuid.uuid4())
-    now = _now_iso()
-    if owner_user_id is None and owner_client_id:
-        _anonymous_trial_used_clients.add(owner_client_id)
-    record = {
-        "id": debate_id,
-        "title": req.title,
-        "question": req.question,
-        "status": "draft",
-        "owner_user_id": owner_user_id,
-        "owner_client_id": owner_client_id,
-        "config_json": config.model_dump(),
-        "current_round_index": 0,
-        "created_at": now,
-        "updated_at": now,
-        "rounds": [],
-        "round_summaries": [],
-        "report": {},
-    }
-    _debates[debate_id] = record
-    return record
+    now = datetime.now(timezone.utc)
+
+    debate = Debate(
+        id=debate_id,
+        title=req.title,
+        question=req.question,
+        status="draft",
+        owner_user_id=owner_user_id,
+        owner_client_id=owner_client_id if owner_user_id is None else None,
+        config_json=config.model_dump(),
+        current_round_index=0,
+        created_at=now,
+        updated_at=now,
+    )
+
+    with Session(engine) as session:
+        session.add(debate)
+        session.commit()
+        session.refresh(debate)
+
+    return _debate_to_record(debate, rounds=[], report=None)
 
 
 def get_debate(debate_id: str) -> dict[str, Any] | None:
-    return _debates.get(debate_id)
+    with Session(engine) as session:
+        debate = session.get(Debate, debate_id)
+        if debate is None:
+            return None
+        rounds = list(session.exec(select(Round).where(Round.debate_id == debate_id)))
+        report = session.exec(
+            select(Report).where(Report.debate_id == debate_id),
+        ).first()
+        return _debate_to_record(debate, rounds=rounds, report=report)
 
 
 def has_used_anonymous_trial(client_id: str) -> bool:
-    return client_id in _anonymous_trial_used_clients
+    """Retorna True se já existir algum debate anônimo para este client_id."""
+
+    with Session(engine) as session:
+        statement = select(Debate).where(
+            Debate.owner_user_id.is_(None),
+            Debate.owner_client_id == client_id,
+        )
+        existing = session.exec(statement).first()
+        return existing is not None
 
 
 def delete_debate(debate_id: str) -> bool:
-    if debate_id not in _debates:
-        return False
-    del _debates[debate_id]
-    return True
+    with Session(engine) as session:
+        debate = session.get(Debate, debate_id)
+        if debate is None:
+            return False
+
+        # Remover rounds e report associados (sem cascata automática).
+        rounds_result = session.exec(select(Round).where(Round.debate_id == debate_id))
+        for r in rounds_result:
+            session.delete(r)
+        report = session.exec(select(Report).where(Report.debate_id == debate_id)).first()
+        if report is not None:
+            session.delete(report)
+
+        session.delete(debate)
+        session.commit()
+        return True
 
 
 def update_debate_status(debate_id: str, status: str) -> None:
-    record = _debates.get(debate_id)
-    if record is None:
-        return
-    record["status"] = status
-    record["updated_at"] = _now_iso()
+    with Session(engine) as session:
+        debate = session.get(Debate, debate_id)
+        if debate is None:
+            return
+        debate.status = status
+        debate.updated_at = datetime.now(timezone.utc)
+        session.add(debate)
+        session.commit()
 
 
 def save_debate_rounds_and_report(
@@ -71,13 +139,53 @@ def save_debate_rounds_and_report(
     rounds: list[dict[str, Any]],
     report: dict[str, Any],
 ) -> None:
-    record = _debates.get(debate_id)
-    if record is None:
-        return
-    record["rounds"] = rounds
-    record["report"] = report
-    record["current_round_index"] = len(rounds)
-    record["updated_at"] = _now_iso()
+    """Mantido para compatibilidade; não é usado no fluxo passo a passo atual."""
+
+    with Session(engine) as session:
+        debate = session.get(Debate, debate_id)
+        if debate is None:
+            return
+
+        # Substitui rounds existentes.
+        existing_rounds = session.exec(
+            select(Round).where(Round.debate_id == debate_id),
+        ).all()
+        for r in existing_rounds:
+            session.delete(r)
+
+        for r in rounds:
+            session.add(
+                Round(
+                    id=str(uuid.uuid4()),
+                    debate_id=debate_id,
+                    index=int(r["index"]),
+                    type=str(r["type"]),
+                    messages=list(r.get("messages", [])),
+                    step_summary=None,
+                ),
+            )
+
+        existing_report = session.exec(
+            select(Report).where(Report.debate_id == debate_id),
+        ).first()
+        content_md = str(report.get("content_md", ""))
+        if existing_report is None:
+            session.add(
+                Report(
+                    id=str(uuid.uuid4()),
+                    debate_id=debate_id,
+                    content_md=content_md,
+                    created_at=datetime.now(timezone.utc),
+                ),
+            )
+        else:
+            existing_report.content_md = content_md
+            session.add(existing_report)
+
+        debate.current_round_index = len(rounds)
+        debate.updated_at = datetime.now(timezone.utc)
+        session.add(debate)
+        session.commit()
 
 
 def append_round_and_summary(
@@ -85,49 +193,105 @@ def append_round_and_summary(
     round_data: dict[str, Any],
     step_summary: str,
 ) -> None:
-    record = _debates.get(debate_id)
-    if record is None:
-        return
-    rounds = record.setdefault("rounds", [])
-    round_summaries = record.setdefault("round_summaries", [])
-    rounds.append(round_data)
-    round_summaries.append(step_summary)
-    record["current_round_index"] = len(rounds)
-    record["updated_at"] = _now_iso()
+    with Session(engine) as session:
+        debate = session.get(Debate, debate_id)
+        if debate is None:
+            return
+
+        new_round = Round(
+            id=str(uuid.uuid4()),
+            debate_id=debate_id,
+            index=int(round_data["index"]),
+            type=str(round_data["type"]),
+            messages=list(round_data.get("messages", [])),
+            step_summary=step_summary,
+        )
+        session.add(new_round)
+
+        debate.current_round_index = max(debate.current_round_index, new_round.index + 1)
+        debate.updated_at = datetime.now(timezone.utc)
+        session.add(debate)
+
+        session.commit()
 
 
 def save_debate_report(debate_id: str, report: dict[str, Any]) -> None:
-    record = _debates.get(debate_id)
-    if record is None:
-        return
-    record["report"] = report
-    record["updated_at"] = _now_iso()
+    content_md = str(report.get("content_md", ""))
+    with Session(engine) as session:
+        debate = session.get(Debate, debate_id)
+        if debate is None:
+            return
+
+        existing = session.exec(
+            select(Report).where(Report.debate_id == debate_id),
+        ).first()
+        if existing is None:
+            session.add(
+                Report(
+                    id=str(uuid.uuid4()),
+                    debate_id=debate_id,
+                    content_md=content_md,
+                    created_at=datetime.now(timezone.utc),
+                ),
+            )
+        else:
+            existing.content_md = content_md
+            session.add(existing)
+
+        debate.updated_at = datetime.now(timezone.utc)
+        session.add(debate)
+        session.commit()
 
 
 def get_debate_rounds(debate_id: str) -> list[dict[str, Any]]:
-    record = _debates.get(debate_id)
-    if record is None:
-        return []
-    return record.get("rounds", [])
+    with Session(engine) as session:
+        rounds = session.exec(
+            select(Round).where(Round.debate_id == debate_id),
+        ).all()
+        return [
+            {
+                "index": r.index,
+                "type": r.type,
+                "messages": r.messages or [],
+            }
+            for r in sorted(rounds, key=lambda x: x.index)
+        ]
 
 
 def get_debate_round_summaries(debate_id: str) -> list[str]:
-    record = _debates.get(debate_id)
-    if record is None:
-        return []
-    return record.get("round_summaries", [])
+    with Session(engine) as session:
+        rounds = session.exec(
+            select(Round).where(Round.debate_id == debate_id),
+        ).all()
+        return [r.step_summary or "" for r in sorted(rounds, key=lambda x: x.index)]
 
 
 def get_debate_report(debate_id: str) -> dict[str, Any]:
-    record = _debates.get(debate_id)
-    if record is None:
-        return {}
-    return record.get("report", {})
+    with Session(engine) as session:
+        report = session.exec(
+            select(Report).where(Report.debate_id == debate_id),
+        ).first()
+        if report is None:
+            return {}
+        return {"content_md": report.content_md}
 
 
 def list_debates(page: int = 1, per_page: int = 20) -> tuple[list[dict[str, Any]], int]:
-    items = sorted(_debates.values(), key=lambda d: d["created_at"], reverse=True)
-    total = len(items)
-    start = (page - 1) * per_page
-    end = start + per_page
-    return items[start:end], total
+    with Session(engine) as session:
+        all_ids = session.exec(select(Debate.id)).all()
+        total = len(all_ids)
+        statement = (
+            select(Debate)
+            .order_by(Debate.created_at.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+        debates = session.exec(statement).all()
+        return (
+            [
+                _debate_to_record(d, rounds=[], report=None)
+                for d in debates
+            ],
+            total,
+        )
+

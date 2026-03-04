@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from logos_arena_backend.auth import AuthValidationError, get_clerk_user_id
+from logos_arena_backend.db import init_db
 from logos_arena_backend.schemas.debate import (
     CreateDebateRequest,
     DebateListItem,
@@ -43,6 +44,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def _on_startup() -> None:
+    init_db()
 
 
 def _error_payload(message: str, code: str) -> dict[str, str]:

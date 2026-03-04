@@ -44,7 +44,8 @@ function ThemedClerkProvider({ children }: { children: React.ReactNode }) {
           footerActionLink: "text-matrix-green hover:text-white underline-offset-2",
           socialButtonsBlockButton:
             "bg-white/[0.04] border border-white/15 text-white hover:bg-white/[0.08]",
-          socialButtonsProviderIcon: "text-white/90",
+          socialButtonsProviderIcon:
+            "h-8 w-8 rounded-full bg-white/85 p-1.5 text-black shadow-[0_0_0_1px_rgba(255,255,255,0.25)]",
           dividerLine: "bg-white/20",
           dividerText: "text-white/70",
           modalBackdrop: "bg-black/80 backdrop-blur-[2px]",

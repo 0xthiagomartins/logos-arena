@@ -21,8 +21,7 @@ const DICTIONARY: Record<AppLanguage, Record<string, string>> = {
     "nav.signup": "Cadastrar",
     "nav.auth_disabled": "Auth será habilitado com Clerk",
     "auth.required_title": "Login necessário",
-    "auth.required_description":
-      "Você já usou seu teste grátis anônimo. Faça login ou cadastre-se para criar novos debates.",
+    "auth.required_description": "Faça login ou cadastre-se para criar novos debates.",
     "auth.sign_in": "Entrar",
     "auth.sign_up": "Criar conta",
     "auth.cancel": "Cancelar",
@@ -133,8 +132,7 @@ const DICTIONARY: Record<AppLanguage, Record<string, string>> = {
     "nav.signup": "Sign up",
     "nav.auth_disabled": "Auth will be enabled with Clerk",
     "auth.required_title": "Login required",
-    "auth.required_description":
-      "You already used your anonymous free trial. Sign in or sign up to create more debates.",
+    "auth.required_description": "Sign in or sign up to create new debates.",
     "auth.sign_in": "Sign in",
     "auth.sign_up": "Create account",
     "auth.cancel": "Cancel",
