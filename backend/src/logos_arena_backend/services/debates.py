@@ -160,9 +160,9 @@ def run_debate_service(debate_id: str) -> RunDebateResponse:
     return RunDebateResponse(job_id=result.debate_id, status=result.status)
 
 
-def run_next_step_service(debate_id: str) -> StepRoundResponse | StepMediationResponse:
+def run_next_step_service(debate_id: str, *, extend: bool = False) -> StepRoundResponse | StepMediationResponse:
     try:
-        result = orchestrate_next_step(debate_id)
+        result = orchestrate_next_step(debate_id, extend=extend)
     except DebateStepError as exc:
         raise HTTPException(
             status_code=exc.status_code,
@@ -217,11 +217,11 @@ def get_report_service(debate_id: str) -> ReportResponse:
     return ReportResponse(content_md=report.get("content_md", ""))
 
 
-def run_next_step_stream_service(debate_id: str) -> Iterator[dict[str, Any]]:
+def run_next_step_stream_service(debate_id: str, *, extend: bool = False) -> Iterator[dict[str, Any]]:
     """Wrapper around orchestrate_next_step_stream to keep DebateStepError surface."""
 
     try:
-        yield from orchestrate_next_step_stream(debate_id)
+        yield from orchestrate_next_step_stream(debate_id, extend=extend)
     except DebateStepError as exc:
         # A camada de API decide como representar esse erro (SSE / HTTP).
         raise HTTPException(

@@ -177,21 +177,22 @@ export function getDebateReport(debateId: string): Promise<ReportResponse> {
   return apiRequest<ReportResponse>(`/debates/${debateId}/report`);
 }
 
-export function runDebateStep(debateId: string): Promise<StepResponse> {
+export function runDebateStep(debateId: string, options?: { extend?: boolean }): Promise<StepResponse> {
   return apiRequest<StepResponse>(`/debates/${debateId}/step`, {
     method: "POST",
-    body: JSON.stringify({}),
+    body: JSON.stringify({ extend: options?.extend ?? false }),
   });
 }
 
 export async function runDebateStepStream(
   debateId: string,
   onEvent: (event: StepStreamEvent) => void,
+  options?: { extend?: boolean },
 ): Promise<void> {
   const response = await fetch(`${API_BASE}/debates/${debateId}/step/stream`, {
     method: "POST",
     headers: buildApiHeaders(),
-    body: JSON.stringify({}),
+    body: JSON.stringify({ extend: options?.extend ?? false }),
     cache: "no-store",
   });
 

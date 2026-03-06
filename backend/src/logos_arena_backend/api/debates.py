@@ -14,6 +14,7 @@ from logos_arena_backend.schemas.debate import (
     ReportResponse,
     RunDebateResponse,
     StepMediationResponse,
+    StepRequest,
     StepRoundResponse,
 )
 from logos_arena_backend.services.debates import (
@@ -87,17 +88,20 @@ def run_debate_endpoint(debate_id: str) -> RunDebateResponse:
     "/debates/{debate_id}/step",
     response_model=StepRoundResponse | StepMediationResponse,
 )
-def run_debate_step_endpoint(debate_id: str) -> StepRoundResponse | StepMediationResponse:
-    return run_next_step_service(debate_id)
+def run_debate_step_endpoint(debate_id: str, body: StepRequest | None = None) -> StepRoundResponse | StepMediationResponse:
+    extend = body.extend if body else False
+    return run_next_step_service(debate_id, extend=extend)
 
 
 @router.post(
     "/debates/{debate_id}/step/stream",
 )
-def run_debate_step_stream_endpoint(debate_id: str) -> StreamingResponse:
+def run_debate_step_stream_endpoint(debate_id: str, body: StepRequest | None = None) -> StreamingResponse:
+    extend = body.extend if body else False
+
     def _event_generator() -> Iterator[str]:
         try:
-            for item in run_next_step_stream_service(debate_id):
+            for item in run_next_step_stream_service(debate_id, extend=extend):
                 yield _sse_event(item["event"], item["data"])  # type: ignore[index]
             yield _sse_event("done", {"ok": True})
         except HTTPException as exc:

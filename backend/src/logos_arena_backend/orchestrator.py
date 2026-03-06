@@ -9,11 +9,9 @@ from logos_arena_backend.store import (
     append_round_and_summary,
     get_debate,
     save_debate_report,
+    set_debate_extended_rebuttals,
     update_debate_status,
 )
-
-
-ROUND_TYPES = ["opening", "rebuttal", "closing"]
 
 
 @dataclass
@@ -67,7 +65,7 @@ def _extract_content(response: Any) -> str:
 
 
 def _build_system_prompts(record: dict[str, Any]) -> tuple[str, str]:
-    config = record.get("config_json", {})
+    config = record.get("config_json", {}) or {}
     mediator_prefs = config.get("mediator_prefs", {}) or {}
 
     explain_like_12yo = bool(mediator_prefs.get("explain_like_12yo", False))
@@ -90,7 +88,7 @@ def _build_system_prompts(record: dict[str, Any]) -> tuple[str, str]:
         f"{debater_style}"
     ).strip()
 
-    mediator_style_parts: list[str] = []
+    mediator_style_parts = []
     if explain_like_12yo:
         mediator_style_parts.append("explique de forma acessível, como para alguém de 12 anos.")
     if rigor_formal:
@@ -109,106 +107,109 @@ def _build_system_prompts(record: dict[str, Any]) -> tuple[str, str]:
     return system_prompt_debater, mediator_system_prompt
 
 
-def _generate_round(
+def _turn_type(turn_index: int, extended: bool) -> str:
+    """Retorna opening, rebuttal ou closing para o turn_index dado."""
+    if turn_index < 2:
+        return "opening"
+    if turn_index < 4:
+        return "rebuttal"
+    if extended:
+        if turn_index < 6:
+            return "rebuttal"
+        return "closing"
+    return "closing"
+
+
+def _speaker(turn_index: int) -> str:
+    """debater_a = Pro (par), debater_b = Con (ímpar)."""
+    return "debater_a" if turn_index % 2 == 0 else "debater_b"
+
+
+def _history_from_rounds(rounds: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """Lista de {role, content} em ordem, um por round (cada round tem 1 mensagem)."""
+    out: list[dict[str, str]] = []
+    for r in sorted(rounds, key=lambda x: x["index"]):
+        msgs = r.get("messages") or []
+        if msgs:
+            out.append({"role": msgs[0]["role"], "content": msgs[0]["content"]})
+    return out
+
+
+def _generate_turn(
     question: str,
-    round_index: int,
+    turn_index: int,
+    history: list[dict[str, str]],
     system_prompt_debater: str,
-    rounds_so_far: list[dict[str, Any]],
+    extended: bool,
 ) -> dict[str, Any]:
-    if round_index == 0:
-        pro_user_prompt = (
-            "Você é o debatedor a favor (Pro).\n"
-            f"Tese: {question}\n\n"
-            "Faça uma fala de abertura apresentando os principais argumentos "
-            "a favor da tese, em até 4 tópicos numerados + 1 parágrafo curto "
-            "de conclusão."
+    """Gera uma única fala (um turno). Retorna { role, content } e tipo do turno."""
+    turn_type = _turn_type(turn_index, extended)
+    speaker = _speaker(turn_index)
+
+    if turn_type == "opening":
+        if speaker == "debater_a":
+            user_prompt = (
+                "Você é o debatedor a favor (Pro).\n"
+                f"Tese: {question}\n\n"
+                "Faça uma fala de abertura apresentando os principais argumentos "
+                "a favor da tese, em até 4 tópicos numerados + 1 parágrafo curto de conclusão."
+            )
+        else:
+            user_prompt = (
+                "Você é o debatedor contra (Con).\n"
+                f"Tese: {question}\n\n"
+                "Faça uma fala de abertura apresentando os principais argumentos "
+                "contra a tese, em até 4 tópicos numerados + 1 parágrafo curto de conclusão."
+            )
+    elif turn_type == "rebuttal":
+        # Quem fala agora responde ao que o outro já disse (histórico).
+        other_side = "Pro (a favor)" if speaker == "debater_b" else "Contra (Con)"
+        history_text = "\n\n".join(
+            f"Fala {i+1} ({'Pro' if h['role'] == 'debater_a' else 'Con'}):\n{h['content']}"
+            for i, h in enumerate(history)
         )
-        con_user_prompt = (
-            "Você é o debatedor contra (Con).\n"
+        user_prompt = (
+            f"Você é o debatedor {'a favor (Pro)' if speaker == 'debater_a' else 'contra (Con)'}.\n"
             f"Tese: {question}\n\n"
-            "Faça uma fala de abertura apresentando os principais argumentos "
-            "contra a tese, em até 4 tópicos numerados + 1 parágrafo curto "
-            "de conclusão."
-        )
-    elif round_index == 1:
-        opening_round = rounds_so_far[0]
-        opening_pro_text = opening_round["messages"][0]["content"]
-        opening_con_text = opening_round["messages"][1]["content"]
-        pro_user_prompt = (
-            "Você é o debatedor a favor (Pro).\n"
-            f"Tese: {question}\n\n"
-            "Abaixo está a fala de abertura do lado Contra (Con). "
-            "Faça uma réplica focada em refutar os pontos principais, "
-            "sem repetir toda a sua abertura.\n\n"
-            "=== Abertura do lado Contra ===\n"
-            f"{opening_con_text}\n\n"
-            "Responda em até 4 tópicos numerados, apontando especificamente "
-            "quais premissas ou interpretações você considera fracas ou "
-            "questionáveis, e conclua com 1 parágrafo curto."
-        )
-        con_user_prompt = (
-            "Você é o debatedor contra (Con).\n"
-            f"Tese: {question}\n\n"
-            "Abaixo está a fala de abertura do lado Pro (a favor). "
-            "Faça uma réplica focada em refutar os pontos principais, "
-            "sem repetir toda a sua abertura.\n\n"
-            "=== Abertura do lado Pro ===\n"
-            f"{opening_pro_text}\n\n"
-            "Responda em até 4 tópicos numerados, apontando especificamente "
-            "quais premissas ou interpretações você considera fracas ou "
-            "questionáveis, e conclua com 1 parágrafo curto."
-        )
-    elif round_index == 2:
-        pro_user_prompt = (
-            "Você é o debatedor a favor (Pro).\n"
-            f"Tese: {question}\n\n"
-            "Com base na sua própria abertura e réplica, e também na posição "
-            "do lado Contra, faça um fechamento curto.\n\n"
-            "Resuma em até 3 bullets os pontos que você considera mais fortes "
-            "a favor da tese e finalize com 1 parágrafo curto reforçando por "
-            "que o público deveria concordar com você."
-        )
-        con_user_prompt = (
-            "Você é o debatedor contra (Con).\n"
-            f"Tese: {question}\n\n"
-            "Com base na sua própria abertura e réplica, e também na posição "
-            "do lado Pro, faça um fechamento curto.\n\n"
-            "Resuma em até 3 bullets os pontos que você considera mais fortes "
-            "contra a tese e finalize com 1 parágrafo curto reforçando por "
-            "que o público deveria concordar com você."
+            "Abaixo estão as falas anteriores do debate, em ordem.\n\n"
+            f"{history_text}\n\n"
+            "Faça uma réplica focada em refutar os pontos principais do outro lado, "
+            "em até 4 tópicos numerados + 1 parágrafo curto. Aponte premissas fracas ou questionáveis."
         )
     else:
-        raise ValueError(f"Round index inválido: {round_index}")
+        # closing
+        history_text = "\n\n".join(
+            f"Fala {i+1} ({'Pro' if h['role'] == 'debater_a' else 'Con'}):\n{h['content']}"
+            for i, h in enumerate(history)
+        )
+        user_prompt = (
+            f"Você é o debatedor {'a favor (Pro)' if speaker == 'debater_a' else 'contra (Con)'}.\n"
+            f"Tese: {question}\n\n"
+            "Abaixo está o debate até agora:\n\n"
+            f"{history_text}\n\n"
+            "Faça um fechamento curto: resuma em até 3 bullets os pontos mais fortes do seu lado "
+            "e finalize com 1 parágrafo reforçando por que o público deveria concordar com você."
+        )
 
-    pro_response = llm_generate(
+    response = llm_generate(
         role="debater",
         messages=[
             {"role": "system", "content": system_prompt_debater},
-            {"role": "user", "content": pro_user_prompt},
+            {"role": "user", "content": user_prompt},
         ],
     )
-    con_response = llm_generate(
-        role="debater",
-        messages=[
-            {"role": "system", "content": system_prompt_debater},
-            {"role": "user", "content": con_user_prompt},
-        ],
-    )
-
-    return {
-        "index": round_index,
-        "type": ROUND_TYPES[round_index],
-        "messages": [
-            {"role": "debater_a", "content": _extract_content(pro_response)},
-            {"role": "debater_b", "content": _extract_content(con_response)},
-        ],
-    }
+    content = _extract_content(response)
+    return {"role": speaker, "content": content}
 
 
 def _generate_step_summary(question: str, round_data: dict[str, Any]) -> str:
-    pro_text = round_data["messages"][0]["content"]
-    con_text = round_data["messages"][1]["content"]
-    round_type = round_data["type"]
+    """Resumo de qualidade para um único turno (uma mensagem)."""
+    msgs = round_data.get("messages") or []
+    if not msgs:
+        return ""
+    single = msgs[0]
+    role_label = "Pro" if single["role"] == "debater_a" else "Con"
+    round_type = round_data.get("type", "round")
 
     response = llm_generate(
         role="mediator",
@@ -224,11 +225,10 @@ def _generate_step_summary(question: str, round_data: dict[str, Any]) -> str:
                 "role": "user",
                 "content": (
                     f"Tese: {question}\n"
-                    f"Round: {round_type}\n\n"
-                    f"Argumentos do lado Pro:\n{pro_text}\n\n"
-                    f"Argumentos do lado Con:\n{con_text}\n\n"
-                    "Escreva um resumo de qualidade deste round em 2 a 4 frases, "
-                    "apontando forças argumentativas e possíveis falhas lógicas de cada lado."
+                    f"Momento: {round_type} – fala do lado {role_label}\n\n"
+                    f"Fala:\n{single['content']}\n\n"
+                    "Escreva um resumo de qualidade em 2 a 4 frases: "
+                    "forças argumentativas e possíveis falhas lógicas."
                 ),
             },
         ],
@@ -255,16 +255,16 @@ def _iter_typed_chunks(text: str, chunk_size: int = 6, delay_seconds: float = 0.
 
 
 def _rounds_as_text(rounds: list[dict[str, Any]]) -> str:
-    return "\n\n".join(
-        [
-            (
-                f"Round {round_info['index']} ({round_info['type']}):\n"
-                f"Pro: {round_info['messages'][0]['content']}\n"
-                f"Con: {round_info['messages'][1]['content']}"
-            )
-            for round_info in rounds
-        ]
-    )
+    """Formato para o mediador: cada round tem 1 mensagem."""
+    lines: list[str] = []
+    for r in sorted(rounds, key=lambda x: x["index"]):
+        msgs = r.get("messages") or []
+        t = r.get("type", "round")
+        if msgs:
+            m = msgs[0]
+            label = "Pro" if m["role"] == "debater_a" else "Con"
+            lines.append(f"Turno {r['index'] + 1} ({t}) – {label}:\n{m['content']}")
+    return "\n\n".join(lines)
 
 
 def _generate_mediator_report(
@@ -274,7 +274,7 @@ def _generate_mediator_report(
 ) -> str:
     mediator_user_prompt = (
         f"Você é o mediador de um debate sobre a tese: {question}.\n\n"
-        "Abaixo estão os rounds do debate (lado Pro e lado Con):\n\n"
+        "Abaixo estão os turnos do debate (cada fala em ordem):\n\n"
         f"{_rounds_as_text(rounds)}\n\n"
         "Produza uma síntese final em Markdown seguindo EXATAMENTE esta estrutura:\n"
         "1. **Resumo dos argumentos do lado Pro** (em bullets).\n"
@@ -295,7 +295,11 @@ def _generate_mediator_report(
     return _extract_content(report_response)
 
 
-def run_next_step(debate_id: str) -> DebateStepResult:
+def _total_turns(extended: bool) -> int:
+    return 8 if extended else 6
+
+
+def run_next_step(debate_id: str, *, extend: bool = False) -> DebateStepResult:
     record = get_debate(debate_id)
     if record is None:
         raise DebateStepError(status_code=404, code="DEBATE_NOT_FOUND", message="Debate não encontrado.")
@@ -315,26 +319,47 @@ def run_next_step(debate_id: str) -> DebateStepResult:
         )
 
     question = record["question"]
+    config = record.get("config_json") or {}
+    extended_rebuttals = bool(config.get("extended_rebuttals", False))
     rounds = record.get("rounds", [])
     report = record.get("report", {}) or {}
     system_prompt_debater, mediator_system_prompt = _build_system_prompts(record)
 
+    # Se estamos exatamente após a réplica do Con (4 turnos) e o usuário pediu aprofundar, ativar flag
+    if extend and len(rounds) == 4 and not extended_rebuttals:
+        set_debate_extended_rebuttals(debate_id)
+        extended_rebuttals = True
+        record = get_debate(debate_id) or record
+        config = record.get("config_json") or {}
+
+    total = _total_turns(extended_rebuttals)
+    turn_index = len(rounds)
+
     try:
-        if len(rounds) < 3:
+        if turn_index < total:
             if status == "draft":
                 update_debate_status(debate_id, "running")
-            round_index = len(rounds)
-            round_data = _generate_round(
+
+            history = _history_from_rounds(rounds)
+            single_message = _generate_turn(
                 question=question,
-                round_index=round_index,
+                turn_index=turn_index,
+                history=history,
                 system_prompt_debater=system_prompt_debater,
-                rounds_so_far=rounds,
+                extended=extended_rebuttals,
             )
+            turn_type = _turn_type(turn_index, extended_rebuttals)
+
+            round_data = {
+                "index": turn_index,
+                "type": turn_type,
+                "messages": [single_message],
+            }
             step_summary = _generate_step_summary(question=question, round_data=round_data)
             append_round_and_summary(debate_id=debate_id, round_data=round_data, step_summary=step_summary)
             return DebateStepResult(
                 step_type="round",
-                round_index=round_index,
+                round_index=turn_index,
                 round=round_data,
                 step_summary=step_summary,
                 status="running",
@@ -349,6 +374,8 @@ def run_next_step(debate_id: str) -> DebateStepResult:
 
         if status == "draft":
             update_debate_status(debate_id, "running")
+        record = get_debate(debate_id) or record
+        rounds = record.get("rounds", [])
         report_content = _generate_mediator_report(
             question=question,
             rounds=rounds,
@@ -368,7 +395,7 @@ def run_next_step(debate_id: str) -> DebateStepResult:
         raise
 
 
-def run_next_step_stream(debate_id: str) -> Iterator[dict[str, Any]]:
+def run_next_step_stream(debate_id: str, *, extend: bool = False) -> Iterator[dict[str, Any]]:
     record = get_debate(debate_id)
     if record is None:
         raise DebateStepError(status_code=404, code="DEBATE_NOT_FOUND", message="Debate não encontrado.")
@@ -388,47 +415,60 @@ def run_next_step_stream(debate_id: str) -> Iterator[dict[str, Any]]:
         )
 
     question = record["question"]
+    config = record.get("config_json") or {}
+    extended_rebuttals = bool(config.get("extended_rebuttals", False))
     rounds = record.get("rounds", [])
     report = record.get("report", {}) or {}
+
+    if extend and len(rounds) == 4 and not extended_rebuttals:
+        set_debate_extended_rebuttals(debate_id)
+        extended_rebuttals = True
+        record = get_debate(debate_id) or record
+
+    total = _total_turns(extended_rebuttals)
+    turn_index = len(rounds)
     system_prompt_debater, mediator_system_prompt = _build_system_prompts(record)
 
     try:
-        if len(rounds) < 3:
+        if turn_index < total:
             if status == "draft":
                 update_debate_status(debate_id, "running")
-            round_index = len(rounds)
-            round_type = ROUND_TYPES[round_index]
-            yield {"event": "phase", "data": {"phase": "round_start", "round_index": round_index, "round_type": round_type}}
 
-            round_data = _generate_round(
+            turn_type = _turn_type(turn_index, extended_rebuttals)
+            speaker = _speaker(turn_index)
+            yield {
+                "event": "phase",
+                "data": {
+                    "phase": "round_start",
+                    "round_index": turn_index,
+                    "round_type": turn_type,
+                    "speaker": speaker,
+                },
+            }
+
+            history = _history_from_rounds(rounds)
+            single_message = _generate_turn(
                 question=question,
-                round_index=round_index,
+                turn_index=turn_index,
+                history=history,
                 system_prompt_debater=system_prompt_debater,
-                rounds_so_far=rounds,
+                extended=extended_rebuttals,
             )
 
-            pro_text = round_data["messages"][0]["content"]
-            con_text = round_data["messages"][1]["content"]
+            content = single_message["content"]
+            yield {"event": "message_start", "data": {"target": speaker, "round_index": turn_index, "round_type": turn_type}}
+            for chunk in _iter_typed_chunks(content, chunk_size=4, delay_seconds=0.04):
+                yield {"event": "message_chunk", "data": {"target": speaker, "chunk": chunk}}
+            yield {"event": "message_end", "data": {"target": speaker}}
 
-            yield {
-                "event": "message_start",
-                "data": {"target": "debater_a", "round_index": round_index, "round_type": round_type},
+            round_data = {
+                "index": turn_index,
+                "type": turn_type,
+                "messages": [single_message],
             }
-            for chunk in _iter_typed_chunks(pro_text, chunk_size=4, delay_seconds=0.04):
-                yield {"event": "message_chunk", "data": {"target": "debater_a", "chunk": chunk}}
-            yield {"event": "message_end", "data": {"target": "debater_a"}}
-
-            yield {
-                "event": "message_start",
-                "data": {"target": "debater_b", "round_index": round_index, "round_type": round_type},
-            }
-            for chunk in _iter_typed_chunks(con_text, chunk_size=4, delay_seconds=0.04):
-                yield {"event": "message_chunk", "data": {"target": "debater_b", "chunk": chunk}}
-            yield {"event": "message_end", "data": {"target": "debater_b"}}
-
-            yield {"event": "phase", "data": {"phase": "summary_start", "round_index": round_index}}
+            yield {"event": "phase", "data": {"phase": "summary_start", "round_index": turn_index}}
             step_summary = _generate_step_summary(question=question, round_data=round_data)
-            yield {"event": "message_start", "data": {"target": "step_summary", "round_index": round_index}}
+            yield {"event": "message_start", "data": {"target": "step_summary", "round_index": turn_index}}
             for chunk in _iter_typed_chunks(step_summary, chunk_size=5, delay_seconds=0.035):
                 yield {"event": "message_chunk", "data": {"target": "step_summary", "chunk": chunk}}
             yield {"event": "message_end", "data": {"target": "step_summary"}}
@@ -438,7 +478,7 @@ def run_next_step_stream(debate_id: str) -> Iterator[dict[str, Any]]:
                 "event": "step_done",
                 "data": {
                     "step_type": "round",
-                    "round_index": round_index,
+                    "round_index": turn_index,
                     "round": round_data,
                     "step_summary": step_summary,
                     "status": "running",
@@ -455,6 +495,8 @@ def run_next_step_stream(debate_id: str) -> Iterator[dict[str, Any]]:
 
         if status == "draft":
             update_debate_status(debate_id, "running")
+        record = get_debate(debate_id) or record
+        rounds = record.get("rounds", [])
         yield {"event": "phase", "data": {"phase": "mediation_start"}}
         report_content = _generate_mediator_report(
             question=question,
@@ -484,12 +526,7 @@ def run_next_step_stream(debate_id: str) -> Iterator[dict[str, Any]]:
 
 
 def run_debate(debate_id: str) -> DebateRunResult:
-    """Executa o debate completo (3 rounds + mediação) de forma síncrona.
-
-    Atualiza o status (draft -> running -> completed/failed),
-    chama o LLM para Pro/Con em cada round e para o mediador,
-    e persiste rounds + relatório em memória via store.
-    """
+    """Executa o debate completo (6 ou 8 turnos + mediação) de forma síncrona."""
     record = get_debate(debate_id)
     if record is None:
         raise ValueError("Debate not found")
@@ -498,7 +535,7 @@ def run_debate(debate_id: str) -> DebateRunResult:
         return DebateRunResult(debate_id=debate_id, status=record["status"])
 
     try:
-        for _ in range(4):
+        while True:
             result = run_next_step(debate_id)
             if result.step_type == "mediation":
                 break

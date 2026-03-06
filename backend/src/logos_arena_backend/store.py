@@ -134,6 +134,20 @@ def update_debate_status(debate_id: str, status: str) -> None:
         session.commit()
 
 
+def set_debate_extended_rebuttals(debate_id: str) -> None:
+    """Marca o debate como 'aprofundado': mais um par de réplicas antes do fechamento."""
+    with Session(engine) as session:
+        debate = session.get(Debate, debate_id)
+        if debate is None:
+            return
+        config = dict(debate.config_json or {})
+        config["extended_rebuttals"] = True
+        debate.config_json = config
+        debate.updated_at = datetime.now(timezone.utc)
+        session.add(debate)
+        session.commit()
+
+
 def save_debate_rounds_and_report(
     debate_id: str,
     rounds: list[dict[str, Any]],

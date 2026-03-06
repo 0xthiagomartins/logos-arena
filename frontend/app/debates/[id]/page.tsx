@@ -95,20 +95,33 @@ function RoundCard({
   summary: string;
   t: (key: string) => string;
 }) {
+  const messages = round.messages ?? [];
+  const singleMessage = messages.length === 1 ? messages[0] : null;
+  const speakerLabel = singleMessage?.role === "debater_a" ? "Pro" : "Con";
+
   return (
     <article className="rounded-xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
       <p className="mb-3 text-xs uppercase tracking-[0.2em] text-matrix-dim">
-        Round {round.index + 1} · {round.type}
+        Turno {round.index + 1} · {round.type} · {messages.length === 1 ? speakerLabel : "Pro / Con"}
       </p>
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">Pro</p>
-          <MarkdownContent content={round.messages[0]?.content ?? ""} />
-        </div>
-        <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">Con</p>
-          <MarkdownContent content={round.messages[1]?.content ?? ""} />
-        </div>
+      <div className={messages.length === 1 ? "" : "grid gap-4 md:grid-cols-2"}>
+        {singleMessage ? (
+          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">{speakerLabel}</p>
+            <MarkdownContent content={singleMessage.content ?? ""} />
+          </div>
+        ) : (
+          <>
+            <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+              <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">Pro</p>
+              <MarkdownContent content={round.messages[0]?.content ?? ""} />
+            </div>
+            <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+              <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">Con</p>
+              <MarkdownContent content={round.messages[1]?.content ?? ""} />
+            </div>
+          </>
+        )}
       </div>
       <details className="mt-4 rounded-lg border border-white/15 bg-white/[0.04] p-4">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-matrix-dim">
@@ -126,21 +139,36 @@ function RoundCard({
 }
 
 function DraftCard({ draft, t }: { draft: StreamingDraft; t: (key: string) => string }) {
+  const hasPro = (draft.pro ?? "").trim().length > 0;
+  const hasCon = (draft.con ?? "").trim().length > 0;
+  const singleSpeaker = hasPro !== hasCon;
+  const speakerLabel = hasPro ? "Pro" : "Con";
+
   return (
     <article className="rounded-xl border border-white/15 bg-white/[0.06] p-5 backdrop-blur-sm">
       <p className="mb-2 text-xs uppercase tracking-[0.2em] text-matrix-dim">
-        Round {draft.roundIndex + 1} · {draft.roundType}
+        Turno {draft.roundIndex + 1} · {draft.roundType}
+        {singleSpeaker ? ` · ${speakerLabel}` : ""}
       </p>
       <p className="mb-4 text-sm text-white/75">{draft.phaseLabel}</p>
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">Pro</p>
-          <MarkdownContent content={draft.pro || t("debate.streaming_generating_argument")} />
-        </div>
-        <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">Con</p>
-          <MarkdownContent content={draft.con || t("debate.streaming_waiting_response")} />
-        </div>
+      <div className={singleSpeaker ? "" : "grid gap-4 md:grid-cols-2"}>
+        {singleSpeaker ? (
+          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">{speakerLabel}</p>
+            <MarkdownContent content={draft.pro || draft.con || t("debate.streaming_generating_argument")} />
+          </div>
+        ) : (
+          <>
+            <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+              <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">Pro</p>
+              <MarkdownContent content={draft.pro || t("debate.streaming_generating_argument")} />
+            </div>
+            <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+              <p className="mb-2 text-xs uppercase tracking-[0.18em] text-matrix-dim">Con</p>
+              <MarkdownContent content={draft.con || t("debate.streaming_waiting_response")} />
+            </div>
+          </>
+        )}
       </div>
       <details className="mt-4 rounded-lg border border-white/15 bg-white/[0.04] p-4">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-matrix-dim">
@@ -361,7 +389,8 @@ export default function DebateRunnerPage() {
   );
   const status = state.debate?.status ?? "draft";
   const debateFinished = status === "completed" || status === "failed";
-  const finishedByStructure = state.rounds.length >= 3 && (hasReport || debateFinished);
+  const finishedByStructure = hasReport || debateFinished;
+  const canExtend = state.rounds.length === 4 && !hasReport && !debateFinished && !stepLoading;
   const hasDraftRenderableContent = Boolean(
     streamingDraft &&
       (streamingDraft.pro.trim() ||
@@ -437,7 +466,7 @@ export default function DebateRunnerPage() {
         rounds: roundsPayload.rounds,
         roundSummaries: roundsPayload.round_summaries,
       }));
-      if (debate.current_round_index >= 3 || debate.status === "completed") {
+      if (debate.status === "completed" || debate.current_round_index >= 6) {
         setReportLoading(true);
         const report = await getDebateReport(debateId);
         setState((prev) => ({ ...prev, report }));
@@ -548,18 +577,19 @@ export default function DebateRunnerPage() {
     }
   }
 
-  async function onContinue() {
+  async function onContinue(extend = false) {
     if (!debateId || !canContinue) return;
+    if (extend && !canExtend) return;
     setStepLoading(true);
     setError(null);
     setStreamingDraft(null);
     try {
-      await runDebateStepStream(debateId, applyStreamEvent);
+      await runDebateStepStream(debateId, applyStreamEvent, { extend });
       // Hard sync after each step to avoid stale local status/report state.
       const debate = await getDebate(debateId);
       const roundsPayload = await getDebateRounds(debateId);
       let report: ReportResponse | null = null;
-      if (debate.status === "completed" || debate.current_round_index >= 3) {
+      if (debate.status === "completed" || debate.current_round_index >= 6) {
         report = await getDebateReport(debateId);
       }
       setState((prev) => ({
@@ -728,21 +758,33 @@ export default function DebateRunnerPage() {
                 {t("debate.finished_badge")}
               </span>
             ) : (
-              <button
-                type="button"
-                onClick={onContinue}
-                disabled={!canContinue}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-matrix-green bg-matrix-green/15 px-5 py-2 text-sm font-bold text-white transition hover:bg-matrix-green/25 disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-44"
-              >
-                {stepLoading ? (
-                  <>
-                    <span className="inline-block h-3 w-3 rounded-full bg-matrix-green animate-pulse" />
-                    {t("debate.rendering_step")}
-                  </>
-                ) : (
-                  t("debate.continue")
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {canExtend && (
+                  <button
+                    type="button"
+                    onClick={() => onContinue(true)}
+                    disabled={stepLoading}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-matrix-green/70 bg-matrix-green/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-matrix-green/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {t("debate.extend_debate")}
+                  </button>
                 )}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => onContinue(false)}
+                  disabled={!canContinue}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-matrix-green bg-matrix-green/15 px-5 py-2 text-sm font-bold text-white transition hover:bg-matrix-green/25 disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-44"
+                >
+                  {stepLoading ? (
+                    <>
+                      <span className="inline-block h-3 w-3 rounded-full bg-matrix-green animate-pulse" />
+                      {t("debate.rendering_step")}
+                    </>
+                  ) : (
+                    t("debate.continue")
+                  )}
+                </button>
+              </div>
             )}
           </div>
         </div>

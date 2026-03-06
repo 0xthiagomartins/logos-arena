@@ -81,6 +81,11 @@ class ReportResponse(BaseModel):
     content_md: str = ""
 
 
+class StepRequest(BaseModel):
+    """Body opcional para POST /debates/{id}/step e /step/stream."""
+    extend: bool = False
+
+
 class StepRoundResponse(BaseModel):
     step_type: str = "round"
     round_index: int
