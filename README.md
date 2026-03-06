@@ -16,7 +16,7 @@ LogosArena turns polarising questions into **structured debates**: Pro vs Con, m
 
 | Layer    | Stack |
 |----------|--------|
-| Backend  | FastAPI (Python 3.14+), LiteLLM, in-memory store (MVP) |
+| Backend  | FastAPI (Python 3.14+), LiteLLM, SQLModel, SQLite (MVP) → Postgres (produção) |
 | Frontend | Next.js 15, React 19, TypeScript, Tailwind CSS |
 | LLM      | OpenAI `gpt-4o-mini` (MVP); multi-model later |
 

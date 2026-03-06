@@ -13,12 +13,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(debates_router)
+
 
 @app.on_event("startup")
 def _on_startup() -> None:
     init_db()
-    # Routers
-    app.include_router(debates_router)
 
 
 @app.get("/health", tags=["health"])
