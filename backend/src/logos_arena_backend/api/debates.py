@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, Iterator
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Body, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from logos_arena_backend.schemas.debate import (
@@ -88,7 +88,7 @@ def run_debate_endpoint(debate_id: str) -> RunDebateResponse:
     "/debates/{debate_id}/step",
     response_model=StepRoundResponse | StepMediationResponse,
 )
-def run_debate_step_endpoint(debate_id: str, body: StepRequest | None = None) -> StepRoundResponse | StepMediationResponse:
+def run_debate_step_endpoint(debate_id: str, body: StepRequest | None = Body(None)) -> StepRoundResponse | StepMediationResponse:
     action = body.action if body else "next"
     return run_next_step_service(debate_id, action=action)
 
@@ -96,7 +96,7 @@ def run_debate_step_endpoint(debate_id: str, body: StepRequest | None = None) ->
 @router.post(
     "/debates/{debate_id}/step/stream",
 )
-def run_debate_step_stream_endpoint(debate_id: str, body: StepRequest | None = None) -> StreamingResponse:
+def run_debate_step_stream_endpoint(debate_id: str, body: StepRequest | None = Body(None)) -> StreamingResponse:
     action = body.action if body else "next"
 
     def _event_generator() -> Iterator[str]:
