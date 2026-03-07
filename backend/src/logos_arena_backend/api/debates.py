@@ -89,19 +89,19 @@ def run_debate_endpoint(debate_id: str) -> RunDebateResponse:
     response_model=StepRoundResponse | StepMediationResponse,
 )
 def run_debate_step_endpoint(debate_id: str, body: StepRequest | None = None) -> StepRoundResponse | StepMediationResponse:
-    extend = body.extend if body else False
-    return run_next_step_service(debate_id, extend=extend)
+    action = body.action if body else "next"
+    return run_next_step_service(debate_id, action=action)
 
 
 @router.post(
     "/debates/{debate_id}/step/stream",
 )
 def run_debate_step_stream_endpoint(debate_id: str, body: StepRequest | None = None) -> StreamingResponse:
-    extend = body.extend if body else False
+    action = body.action if body else "next"
 
     def _event_generator() -> Iterator[str]:
         try:
-            for item in run_next_step_stream_service(debate_id, extend=extend):
+            for item in run_next_step_stream_service(debate_id, action=action):
                 yield _sse_event(item["event"], item["data"])  # type: ignore[index]
             yield _sse_event("done", {"ok": True})
         except HTTPException as exc:
@@ -154,4 +154,3 @@ def get_debate_events_endpoint(debate_id: str) -> None:
             "code": "DEBATE_EVENTS_NOT_IMPLEMENTED",
         },
     )
-

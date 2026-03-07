@@ -9,7 +9,6 @@ from logos_arena_backend.store import (
     append_round_and_summary,
     get_debate,
     save_debate_report,
-    set_debate_extended_rebuttals,
     update_debate_status,
 )
 
@@ -107,22 +106,41 @@ def _build_system_prompts(record: dict[str, Any]) -> tuple[str, str]:
     return system_prompt_debater, mediator_system_prompt
 
 
-def _turn_type(turn_index: int, extended: bool) -> str:
-    """Retorna opening, rebuttal ou closing para o turn_index dado."""
-    if turn_index < 2:
+PHASES: tuple[str, str, str] = ("opening", "rebuttal", "closing")
+
+
+def _speaker(turn_index: int, first_speaker: str) -> str:
+    """Alterna sempre entre Pro/Con respeitando first_speaker."""
+    starts_with_pro = first_speaker != "con"
+    pro_turn = turn_index % 2 == 0 if starts_with_pro else turn_index % 2 == 1
+    return "debater_a" if pro_turn else "debater_b"
+
+
+def _current_phase(rounds: list[dict[str, Any]]) -> str:
+    if not rounds:
         return "opening"
-    if turn_index < 4:
-        return "rebuttal"
-    if extended:
-        if turn_index < 6:
-            return "rebuttal"
-        return "closing"
-    return "closing"
+    last_type = str(rounds[-1].get("type", "opening"))
+    return last_type if last_type in PHASES else "opening"
 
 
-def _speaker(turn_index: int) -> str:
-    """debater_a = Pro (par), debater_b = Con (ímpar)."""
-    return "debater_a" if turn_index % 2 == 0 else "debater_b"
+def _phase_turn_count(rounds: list[dict[str, Any]], phase: str) -> int:
+    return sum(1 for r in rounds if str(r.get("type", "")) == phase)
+
+
+def _resolve_next_phase(rounds: list[dict[str, Any]], action: Literal["extend", "next"]) -> str | None:
+    """Define a fase do próximo turno; None significa ir para mediação."""
+    phase = _current_phase(rounds)
+    if action == "extend":
+        return phase
+
+    phase_turns = _phase_turn_count(rounds, phase)
+    if phase == "opening":
+        return "rebuttal" if phase_turns >= 2 else "opening"
+    if phase == "rebuttal":
+        return "closing" if phase_turns >= 2 else "rebuttal"
+    if phase == "closing":
+        return None if phase_turns >= 2 else "closing"
+    return "opening"
 
 
 def _history_from_rounds(rounds: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -138,13 +156,13 @@ def _history_from_rounds(rounds: list[dict[str, Any]]) -> list[dict[str, str]]:
 def _generate_turn(
     question: str,
     turn_index: int,
+    turn_type: str,
+    first_speaker: str,
     history: list[dict[str, str]],
     system_prompt_debater: str,
-    extended: bool,
 ) -> dict[str, Any]:
     """Gera uma única fala (um turno). Retorna { role, content } e tipo do turno."""
-    turn_type = _turn_type(turn_index, extended)
-    speaker = _speaker(turn_index)
+    speaker = _speaker(turn_index, first_speaker)
 
     if turn_type == "opening":
         if speaker == "debater_a":
@@ -295,11 +313,7 @@ def _generate_mediator_report(
     return _extract_content(report_response)
 
 
-def _total_turns(extended: bool) -> int:
-    return 8 if extended else 6
-
-
-def run_next_step(debate_id: str, *, extend: bool = False) -> DebateStepResult:
+def run_next_step(debate_id: str, *, action: Literal["extend", "next"] = "next") -> DebateStepResult:
     record = get_debate(debate_id)
     if record is None:
         raise DebateStepError(status_code=404, code="DEBATE_NOT_FOUND", message="Debate não encontrado.")
@@ -320,23 +334,18 @@ def run_next_step(debate_id: str, *, extend: bool = False) -> DebateStepResult:
 
     question = record["question"]
     config = record.get("config_json") or {}
-    extended_rebuttals = bool(config.get("extended_rebuttals", False))
     rounds = record.get("rounds", [])
     report = record.get("report", {}) or {}
+    first_speaker = str(config.get("first_speaker", "pro")).lower()
+    if first_speaker not in {"pro", "con"}:
+        first_speaker = "pro"
     system_prompt_debater, mediator_system_prompt = _build_system_prompts(record)
 
-    # Se estamos exatamente após a réplica do Con (4 turnos) e o usuário pediu aprofundar, ativar flag
-    if extend and len(rounds) == 4 and not extended_rebuttals:
-        set_debate_extended_rebuttals(debate_id)
-        extended_rebuttals = True
-        record = get_debate(debate_id) or record
-        config = record.get("config_json") or {}
-
-    total = _total_turns(extended_rebuttals)
     turn_index = len(rounds)
+    next_phase = _resolve_next_phase(rounds, action)
 
     try:
-        if turn_index < total:
+        if next_phase is not None:
             if status == "draft":
                 update_debate_status(debate_id, "running")
 
@@ -344,15 +353,15 @@ def run_next_step(debate_id: str, *, extend: bool = False) -> DebateStepResult:
             single_message = _generate_turn(
                 question=question,
                 turn_index=turn_index,
+                turn_type=next_phase,
+                first_speaker=first_speaker,
                 history=history,
                 system_prompt_debater=system_prompt_debater,
-                extended=extended_rebuttals,
             )
-            turn_type = _turn_type(turn_index, extended_rebuttals)
 
             round_data = {
                 "index": turn_index,
-                "type": turn_type,
+                "type": next_phase,
                 "messages": [single_message],
             }
             step_summary = _generate_step_summary(question=question, round_data=round_data)
@@ -395,7 +404,7 @@ def run_next_step(debate_id: str, *, extend: bool = False) -> DebateStepResult:
         raise
 
 
-def run_next_step_stream(debate_id: str, *, extend: bool = False) -> Iterator[dict[str, Any]]:
+def run_next_step_stream(debate_id: str, *, action: Literal["extend", "next"] = "next") -> Iterator[dict[str, Any]]:
     record = get_debate(debate_id)
     if record is None:
         raise DebateStepError(status_code=404, code="DEBATE_NOT_FOUND", message="Debate não encontrado.")
@@ -416,32 +425,27 @@ def run_next_step_stream(debate_id: str, *, extend: bool = False) -> Iterator[di
 
     question = record["question"]
     config = record.get("config_json") or {}
-    extended_rebuttals = bool(config.get("extended_rebuttals", False))
     rounds = record.get("rounds", [])
     report = record.get("report", {}) or {}
-
-    if extend and len(rounds) == 4 and not extended_rebuttals:
-        set_debate_extended_rebuttals(debate_id)
-        extended_rebuttals = True
-        record = get_debate(debate_id) or record
-
-    total = _total_turns(extended_rebuttals)
+    first_speaker = str(config.get("first_speaker", "pro")).lower()
+    if first_speaker not in {"pro", "con"}:
+        first_speaker = "pro"
     turn_index = len(rounds)
+    next_phase = _resolve_next_phase(rounds, action)
     system_prompt_debater, mediator_system_prompt = _build_system_prompts(record)
 
     try:
-        if turn_index < total:
+        if next_phase is not None:
             if status == "draft":
                 update_debate_status(debate_id, "running")
 
-            turn_type = _turn_type(turn_index, extended_rebuttals)
-            speaker = _speaker(turn_index)
+            speaker = _speaker(turn_index, first_speaker)
             yield {
                 "event": "phase",
                 "data": {
                     "phase": "round_start",
                     "round_index": turn_index,
-                    "round_type": turn_type,
+                    "round_type": next_phase,
                     "speaker": speaker,
                 },
             }
@@ -450,20 +454,24 @@ def run_next_step_stream(debate_id: str, *, extend: bool = False) -> Iterator[di
             single_message = _generate_turn(
                 question=question,
                 turn_index=turn_index,
+                turn_type=next_phase,
+                first_speaker=first_speaker,
                 history=history,
                 system_prompt_debater=system_prompt_debater,
-                extended=extended_rebuttals,
             )
 
             content = single_message["content"]
-            yield {"event": "message_start", "data": {"target": speaker, "round_index": turn_index, "round_type": turn_type}}
+            yield {
+                "event": "message_start",
+                "data": {"target": speaker, "round_index": turn_index, "round_type": next_phase},
+            }
             for chunk in _iter_typed_chunks(content, chunk_size=4, delay_seconds=0.04):
                 yield {"event": "message_chunk", "data": {"target": speaker, "chunk": chunk}}
             yield {"event": "message_end", "data": {"target": speaker}}
 
             round_data = {
                 "index": turn_index,
-                "type": turn_type,
+                "type": next_phase,
                 "messages": [single_message],
             }
             yield {"event": "phase", "data": {"phase": "summary_start", "round_index": turn_index}}
@@ -526,7 +534,7 @@ def run_next_step_stream(debate_id: str, *, extend: bool = False) -> Iterator[di
 
 
 def run_debate(debate_id: str) -> DebateRunResult:
-    """Executa o debate completo (6 ou 8 turnos + mediação) de forma síncrona."""
+    """Executa o debate completo por turnos (opening/rebuttal/closing + mediação) de forma síncrona."""
     record = get_debate(debate_id)
     if record is None:
         raise ValueError("Debate not found")
@@ -536,7 +544,7 @@ def run_debate(debate_id: str) -> DebateRunResult:
 
     try:
         while True:
-            result = run_next_step(debate_id)
+            result = run_next_step(debate_id, action="next")
             if result.step_type == "mediation":
                 break
 

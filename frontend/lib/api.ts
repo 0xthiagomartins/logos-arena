@@ -78,6 +78,7 @@ type CreateDebatePayload = {
   config?: {
     question?: string;
     language?: string;
+    first_speaker?: "pro" | "con";
     rounds?: string[];
     max_tokens_per_message?: number;
     mediator_prefs?: {
@@ -177,22 +178,25 @@ export function getDebateReport(debateId: string): Promise<ReportResponse> {
   return apiRequest<ReportResponse>(`/debates/${debateId}/report`);
 }
 
-export function runDebateStep(debateId: string, options?: { extend?: boolean }): Promise<StepResponse> {
+export function runDebateStep(
+  debateId: string,
+  options?: { action?: "extend" | "next" },
+): Promise<StepResponse> {
   return apiRequest<StepResponse>(`/debates/${debateId}/step`, {
     method: "POST",
-    body: JSON.stringify({ extend: options?.extend ?? false }),
+    body: JSON.stringify({ action: options?.action ?? "next" }),
   });
 }
 
 export async function runDebateStepStream(
   debateId: string,
   onEvent: (event: StepStreamEvent) => void,
-  options?: { extend?: boolean },
+  options?: { action?: "extend" | "next" },
 ): Promise<void> {
   const response = await fetch(`${API_BASE}/debates/${debateId}/step/stream`, {
     method: "POST",
     headers: buildApiHeaders(),
-    body: JSON.stringify({ extend: options?.extend ?? false }),
+    body: JSON.stringify({ action: options?.action ?? "next" }),
     cache: "no-store",
   });
 

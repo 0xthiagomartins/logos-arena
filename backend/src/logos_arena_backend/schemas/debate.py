@@ -1,6 +1,6 @@
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class MediatorPrefs(BaseModel):
@@ -14,6 +14,7 @@ class DebateConfig(BaseModel):
     question: str
     language: str = "pt-BR"
     rounds: list[str] = Field(default_factory=lambda: ["opening", "rebuttal", "closing"])
+    first_speaker: Literal["pro", "con"] = "pro"
     max_tokens_per_message: int = 1024
     debater_profiles: list[str] = Field(default_factory=list)
     mediator_prefs: MediatorPrefs = Field(default_factory=MediatorPrefs)
@@ -83,7 +84,15 @@ class ReportResponse(BaseModel):
 
 class StepRequest(BaseModel):
     """Body opcional para POST /debates/{id}/step e /step/stream."""
-    extend: bool = False
+    action: Literal["extend", "next"] = "next"
+    extend: bool | None = None
+
+    @model_validator(mode="after")
+    def _normalize_legacy_extend(self) -> "StepRequest":
+        # Compatibilidade retroativa: payload antigo {"extend": true/false}.
+        if self.extend is not None:
+            self.action = "extend" if self.extend else "next"
+        return self
 
 
 class StepRoundResponse(BaseModel):

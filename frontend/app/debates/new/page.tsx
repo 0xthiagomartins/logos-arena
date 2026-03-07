@@ -64,6 +64,7 @@ export default function NewDebatePage() {
   const [question, setQuestion] = useState("");
   const [simpleMode, setSimpleMode] = useState(false);
   const [rigorMode, setRigorMode] = useState(true);
+  const [firstSpeaker, setFirstSpeaker] = useState<"pro" | "con">("pro");
   const [submitting, setSubmitting] = useState(false);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [questionError, setQuestionError] = useState<string | null>(null);
@@ -112,6 +113,7 @@ export default function NewDebatePage() {
         question: nextQuestion,
         config: {
           question: nextQuestion,
+          first_speaker: firstSpeaker,
           mediator_prefs: {
             explain_like_12yo: simpleMode,
             rigor_formal: rigorMode,
@@ -190,6 +192,37 @@ export default function NewDebatePage() {
           </div>
 
           <div className="space-y-1">
+            <div className="mb-3">
+              <p className="mb-2 text-sm font-semibold text-white/90">{t("new.first_speaker.label")}</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFirstSpeaker("pro")}
+                  disabled={submitting}
+                  className={[
+                    "rounded-full border px-4 py-1.5 text-xs font-semibold transition",
+                    firstSpeaker === "pro"
+                      ? "border-matrix-green bg-matrix-green/20 text-white"
+                      : "border-white/20 bg-white/[0.03] text-white/75 hover:bg-white/[0.08]",
+                  ].join(" ")}
+                >
+                  {t("new.first_speaker.pro")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFirstSpeaker("con")}
+                  disabled={submitting}
+                  className={[
+                    "rounded-full border px-4 py-1.5 text-xs font-semibold transition",
+                    firstSpeaker === "con"
+                      ? "border-matrix-green bg-matrix-green/20 text-white"
+                      : "border-white/20 bg-white/[0.03] text-white/75 hover:bg-white/[0.08]",
+                  ].join(" ")}
+                >
+                  {t("new.first_speaker.con")}
+                </button>
+              </div>
+            </div>
             <div className="grid gap-2">
               <ToggleCard
                 id="simple-mode"
